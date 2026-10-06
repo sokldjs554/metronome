@@ -32,3 +32,7 @@ mlflow.db
 .dvc/tmp/
 *.log
 .env
+
+# never commit trial outputs or raw demo captures (docs/assets/demo holds the curated copies)
+artifacts/bigdata-trial/
+artifacts/demo/
