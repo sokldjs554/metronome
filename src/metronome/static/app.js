@@ -170,8 +170,9 @@
       const tr = document.createElement('tr');
       const statVal = d.statistic !== undefined ? d.statistic : (d.rolling !== undefined ? d.rolling : d.mean);
       const thr = d.threshold !== undefined ? d.threshold : (d.delta !== undefined ? `δ=${d.delta}` : '—');
-      const alarmed = mon.alarms.some((a) => a.detectors.includes(d.name) && a.day === mon.last_alarm_day);
-      tr.innerHTML = `<td>${d.name}</td><td class="num">${typeof statVal === 'number' ? fmt(statVal, 3) : '—'}</td><td class="num">${typeof thr === 'number' ? fmt(thr, 3) : thr}</td><td class="${alarmed ? 'state-alarm' : 'state-ok'}">${alarmed ? '경보' : '정상'}</td>`;
+      const alarmed = typeof statVal === 'number' && typeof thr === 'number' ? statVal > thr
+        : mon.alarms.some((a) => a.detectors.includes(d.name) && a.day === mon.last_alarm_day && mon.days_closed - mon.skipped_days < 7);
+      tr.innerHTML = `<td>${d.name}</td><td class="num">${typeof statVal === 'number' ? fmt(statVal, 3) : '—'}</td><td class="num">${typeof thr === 'number' ? fmt(thr, 3) : thr}</td><td class="${alarmed ? 'state-alarm' : 'state-ok'}">${alarmed ? '임계 초과' : '정상'}</td>`;
       tb.appendChild(tr);
     });
     drawDaily(mon.daily, mon.alarms, mon.baseline_val_mae);

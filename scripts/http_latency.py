@@ -53,7 +53,10 @@ def main() -> None:
             "p99": float(np.percentile(arr, 99)),
             "mean": float(arr.mean()),
         },
-        "model_call_ms": {"p50": float(np.percentile(model_ms, 50)), "p95": float(np.percentile(model_ms, 95))},
+        "model_call_ms": {
+            "p50": float(np.percentile(model_ms, 50)),
+            "p95": float(np.percentile(model_ms, 95)),
+        },
         "requests_per_s_serial": float(args.n / (arr.sum() / 1000)),
         "client": "httpx sync, keep-alive, loopback, serial",
         "machine": platform.machine(),
@@ -62,7 +65,13 @@ def main() -> None:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2))
-    print(json.dumps(report["http_ms"]), "model", json.dumps(report["model_call_ms"]), "median", statistics.median(samples))
+    print(
+        json.dumps(report["http_ms"]),
+        "model",
+        json.dumps(report["model_call_ms"]),
+        "median",
+        statistics.median(samples),
+    )
 
 
 if __name__ == "__main__":

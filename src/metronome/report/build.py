@@ -198,7 +198,7 @@ def summarize_ltsf(runs_dir: Path, paper_reference: Path | None) -> dict[str, An
     for path in sorted(runs_dir.glob("*.json")):
         r = json.loads(path.read_text())
         cfg = r["config"]
-        key = f"{cfg['dataset']}/{cfg['model']}/{cfg['horizon']}"
+        key = f"{cfg['dataset']}.{cfg['model']}.{cfg['horizon']}"  # dots, so slash markers can address it
         entry: dict[str, Any] = {
             "dataset": cfg["dataset"],
             "model": cfg["model"],
