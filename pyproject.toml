@@ -52,7 +52,7 @@ where = ["src"]
 metronome = ["static/*.html", "static/*.css", "static/*.js", "py.typed"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]  # "." so tests can import tests.conftest under the pytest entrypoint (not only python -m pytest)
 testpaths = ["tests"]
 addopts = "-ra -q"
 filterwarnings = ["ignore::DeprecationWarning"]
