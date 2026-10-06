@@ -14,6 +14,7 @@ from typing import Any
 
 import mlflow
 from mlflow import MlflowClient
+from mlflow.exceptions import MlflowException
 
 from metronome.serving.registry import Registry, VerificationError
 
@@ -136,7 +137,18 @@ def register_versions(
                 }
             )
             mlflow.log_artifacts(str(registry.versions_dir / version))
-            mv = mlflow.register_model(f"runs:/{run.info.run_id}", name)
+            try:
+                client.get_registered_model(name)
+            except MlflowException:
+                client.create_registered_model(name, description="Mirror of the Metronome file registry")
+            # MLflow 3 ties register_model to logged models; the file registry's directory is the model,
+            # so create the version from the run's artifact root instead.
+            mv = client.create_model_version(
+                name,
+                source=run.info.artifact_uri,
+                run_id=run.info.run_id,
+                description=f"file registry {version}",
+            )
             if verified and version == active:
                 client.set_registered_model_alias(name, "production", mv.version)
             client.set_model_version_tag(name, mv.version, "file_version", version)
