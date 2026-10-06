@@ -75,7 +75,7 @@ p95 <!-- num:artifacts/serving/http_latency.json#http_ms/p95:.2f -->5.87<!-- /nu
 
 | 파일 | 내용 |
 |---|---|
-| `Dockerfile` | ONNX Runtime 전용 서빙 이미지. 레지스트리는 읽기 전용 볼륨 |
+| `Dockerfile` | ONNX Runtime 전용 서빙 이미지. 레지스트리는 읽기 전용 볼륨(기동 시 ACTIVE 를 검증만 하고 다시 쓰지 않으며, 재학습 요청을 쓸 수 없으면 오류를 기록하고 계속 서빙) |
 | `Dockerfile.worker` | PyTorch CPU + 학습·내보내기. 같은 볼륨에 쓰고 API 에 activate 요청 |
 | `docker-compose.yml` | `init`(ETTh1 내려받기 + v0001) → `api` + `worker` |
 | `Dockerfile.demo` + `render.yaml` | 단일 컨테이너 공개 데모(빌드 시 v0001 학습, `metronome demo` 로 API+worker 스레드) |

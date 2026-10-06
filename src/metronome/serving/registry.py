@@ -200,7 +200,10 @@ class Registry:
 
     def activate(self, version: str) -> dict[str, Any]:
         report = self.verify(version)
-        _atomic_write(self.root / "ACTIVE", version + "\n")
+        # Re-activating what ACTIVE already names is a no-op on disk, so a registry mounted
+        # read-only (the serving container) can still verify and serve its pointer at startup.
+        if self.active() != version:
+            _atomic_write(self.root / "ACTIVE", version + "\n")
         return report
 
     # ---- retrain jobs (API -> worker hand-off) ------------------------------------------------

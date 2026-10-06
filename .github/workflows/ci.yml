@@ -104,7 +104,8 @@ jobs:
           chmod -R a+rX ci-input/registry
           docker run -d --name api -p 8000:8000 -v "$PWD/ci-input/registry/etth1:/registry:ro" metronome-serve
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ready && break; sleep 1; done
-          curl -sf http://127.0.0.1:8000/ready | tee ready1.json
+          curl -sf http://127.0.0.1:8000/ready > ready1.json || { echo "::error::api container never became ready"; docker logs api; exit 1; }
+          cat ready1.json
           python3 - <<'EOF'
           import json, urllib.request
           dep = json.load(urllib.request.urlopen("http://127.0.0.1:8000/v1/deployment"))
@@ -116,7 +117,8 @@ jobs:
           EOF
           docker restart api
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ready && break; sleep 1; done
-          curl -sf http://127.0.0.1:8000/ready | tee ready2.json
+          curl -sf http://127.0.0.1:8000/ready > ready2.json || { echo "::error::api container not ready after restart"; docker logs api; exit 1; }
+          cat ready2.json
           python3 -c "import json; a=json.load(open('ready1.json')); b=json.load(open('ready2.json')); assert a['model']==b['model']=='v0002', (a,b)"
           docker image inspect metronome-serve --format 'image size {{.Size}} bytes'
       - name: the serving image must not contain torch

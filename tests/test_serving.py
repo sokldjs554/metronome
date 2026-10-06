@@ -174,3 +174,43 @@ def test_detector_alarm_requests_retrain_on_drift(deployment: dict) -> None:
     mon = c.get("/v1/monitor").json()
     assert mon["alarms"] and mon["pending_jobs"]
     assert np.isfinite(mon["rolling_7d_mae"])
+
+
+def test_read_only_registry_still_serves(
+    deployment: dict, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The serving container mounts the registry read-only: startup must verify and serve the
+    ACTIVE pointer without rewriting it, and a retrain hand-off failure must not take the API down."""
+    import shutil
+
+    import metronome.serving.registry as registry_mod
+
+    root = tmp_path / "registry"  # private copy: other tests leave jobs behind in the shared one
+    shutil.copytree(deployment["root"], root, ignore=shutil.ignore_patterns("jobs", "work"))
+    root.joinpath("ACTIVE").write_text("v0001\n")
+
+    def refuse(path: Path, text: str) -> None:
+        raise PermissionError(13, "Permission denied", str(path))
+
+    monkeypatch.setattr(registry_mod, "_atomic_write", refuse)
+    active_before = (root / "ACTIVE").read_text()
+    app = create_app(root, api_key=None, threads=1, detector_specs=("ratio-0.2",))
+    c = TestClient(app)
+    ready = c.get("/ready")
+    assert ready.status_code == 200 and ready.json()["model"] == "v0001"
+    assert (root / "ACTIVE").read_text() == active_before
+    assert not (root / "ACTIVE.tmp").exists()
+    # Re-activating the same version is a no-op on disk; activating another one needs the write.
+    assert c.post("/v1/models/v0001/activate").status_code == 200
+    # Replay through the drift so the detector asks for a retrain: the hand-off fails, serving continues.
+    assert c.post("/v1/replay/start", json={"start_row": 24 * 50}).status_code == 200
+    requested = None
+    for _ in range(20):
+        step = c.post("/v1/replay/step", json={"steps": 24})
+        assert step.status_code == 200
+        if step.json()["retrain_requests"]:
+            requested = step.json()["retrain_requests"][0]
+            break
+    assert requested is not None and requested["job"] is None and "not writable" in requested["error"]
+    assert c.get("/ready").status_code == 200
+    assert c.get("/v1/monitor").json()["pending_jobs"] == []

@@ -138,7 +138,11 @@ class ServiceState:
             "cutoff_time": current,
             "active_version": self.active.model.version if self.active.model else None,
         }
-        path = self.registry.request_retrain(payload)
+        try:
+            path = self.registry.request_retrain(payload)
+        except OSError as exc:  # read-only registry mount: keep serving, report the hand-off failure
+            LOGGER.error("cannot write retrain job to %s: %s", self.registry.root, exc)
+            return {"job": None, "error": f"registry not writable: {exc.strerror or exc}", **payload}
         record = {"job": path.stem, **payload}
         self.retrain_requests.append(record)
         return record
