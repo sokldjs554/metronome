@@ -198,7 +198,7 @@ def summarize_ltsf(runs_dir: Path, paper_reference: Path | None) -> dict[str, An
     for path in sorted(runs_dir.glob("*.json")):
         r = json.loads(path.read_text())
         cfg = r["config"]
-        key = f"{cfg['dataset']}.{cfg['model']}.{cfg['horizon']}"  # dots, so slash markers can address it
+        key = f"{cfg['dataset']}.{cfg['model']}.{cfg['horizon']}.s{cfg['seed']}"  # dots: slash markers can address it
         entry: dict[str, Any] = {
             "dataset": cfg["dataset"],
             "model": cfg["model"],
@@ -224,8 +224,18 @@ def summarize_ltsf(runs_dir: Path, paper_reference: Path | None) -> dict[str, An
             entry["mae_rel_diff_pct"] = (entry["mae"] - ref["mae"]) / ref["mae"] * 100
             entry["within_3pct"] = abs(entry["mse_rel_diff_pct"]) <= 3.0
         runs[key] = entry
+    # per configuration: every seed that was run, so a document can quote the spread, never a best seed
+    configs: dict[str, Any] = {}
+    for entry in runs.values():
+        ck = f"{entry['dataset']}.{entry['model']}.{entry['horizon']}"
+        c = configs.setdefault(ck, {"seeds": {}, "n_seeds": 0})
+        c["seeds"][f"s{entry['seed']}"] = {"mse": entry["mse"], "mae": entry["mae"]}
+        c["n_seeds"] = len(c["seeds"])
+        mses = [v["mse"] for v in c["seeds"].values()]
+        c["mse_min"], c["mse_max"], c["mse_mean"] = min(mses), max(mses), sum(mses) / len(mses)
     return {
         "runs": runs,
+        "configs": configs,
         "paper_source": {k: v.get("source") for k, v in paper.items() if isinstance(v, dict)},
     }
 

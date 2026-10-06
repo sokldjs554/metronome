@@ -1,0 +1,108 @@
+{
+  "config": {
+    "dataset": "etth1",
+    "kind": "etth",
+    "model": "dlinear",
+    "lookback": 336,
+    "horizon": 192,
+    "seed": 2021,
+    "train": {
+      "lr": 0.005,
+      "batch_size": 32,
+      "max_epochs": 20,
+      "patience": 3,
+      "lr_schedule": "halving",
+      "pct_start": 0.3,
+      "loss": "mse",
+      "threads": 1,
+      "eval_batch_size": 1024,
+      "grad_clip": null
+    },
+    "model_kwargs": {},
+    "tag": ""
+  },
+  "dataset_content_sha256": "ff12d69692f938ac5ce1c71d549f02a80b293b61e83ae53386a4054d7658fc4a",
+  "channels": [
+    "HUFL",
+    "HULL",
+    "MUFL",
+    "MULL",
+    "LUFL",
+    "LULL",
+    "OT"
+  ],
+  "borders": {
+    "start": [
+      0,
+      8304,
+      11184
+    ],
+    "end": [
+      8640,
+      11520,
+      14400
+    ]
+  },
+  "n_windows": {
+    "train": 8113,
+    "val": 2689,
+    "test": 2689
+  },
+  "metrics": {
+    "mse": 0.44069209694862366,
+    "mae": 0.4477618634700775,
+    "per_horizon_mse_at": {
+      "1": 0.11375623941421509,
+      "24": 0.3327794075012207,
+      "48": 0.368678480386734,
+      "96": 0.46580106019973755
+    }
+  },
+  "fit": {
+    "epochs": 5,
+    "best_epoch": 2,
+    "best_val": 0.8686152476056795,
+    "seconds": 6.648610546000782,
+    "stopped_early": true,
+    "history": [
+      {
+        "epoch": 1,
+        "train": 0.4557633463403057,
+        "val": 0.9053052283211152,
+        "lr": 0.005
+      },
+      {
+        "epoch": 2,
+        "train": 0.4093168350656362,
+        "val": 0.8686152476056795,
+        "lr": 0.0025
+      },
+      {
+        "epoch": 3,
+        "train": 0.3974961305860672,
+        "val": 0.8794572876704675,
+        "lr": 0.00125
+      },
+      {
+        "epoch": 4,
+        "train": 0.3903904037661901,
+        "val": 0.8721575978610009,
+        "lr": 0.000625
+      },
+      {
+        "epoch": 5,
+        "train": 0.3871060892449168,
+        "val": 0.8800734267575273,
+        "lr": 0.0003125
+      }
+    ]
+  },
+  "inference_seconds": 0.24011448100100097,
+  "n_parameters": 129408,
+  "state_sha256": "834270e04f8202c5ef93e8b7df00f39e1cfcb4b8543646a3f4c5c8c5dad7faca",
+  "env": {
+    "torch": "2.14.1+cu130",
+    "python": "3.13.16",
+    "threads": 1
+  }
+}

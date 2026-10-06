@@ -1,0 +1,134 @@
+{
+  "config": {
+    "dataset": "weather",
+    "kind": "other",
+    "model": "linear",
+    "lookback": 336,
+    "horizon": 96,
+    "seed": 2021,
+    "train": {
+      "lr": 0.005,
+      "batch_size": 32,
+      "max_epochs": 20,
+      "patience": 3,
+      "lr_schedule": "halving",
+      "pct_start": 0.3,
+      "loss": "mse",
+      "threads": 1,
+      "eval_batch_size": 1024,
+      "grad_clip": null
+    },
+    "model_kwargs": {},
+    "tag": ""
+  },
+  "dataset_content_sha256": "8b5843e5db72c7996b0fe7ca2ca777ce4b3f1cd2d17f8e8d1dabd25ad2804244",
+  "channels": [
+    "p (mbar)",
+    "T (degC)",
+    "Tpot (K)",
+    "Tdew (degC)",
+    "rh (%)",
+    "VPmax (mbar)",
+    "VPact (mbar)",
+    "VPdef (mbar)",
+    "sh (g/kg)",
+    "H2OC (mmol/mol)",
+    "rho (g/m**3)",
+    "wv (m/s)",
+    "max. wv (m/s)",
+    "wd (deg)",
+    "rain (mm)",
+    "raining (s)",
+    "SWDR (W/m\u00b2)",
+    "PAR (\u00b5mol/m\u00b2/s)",
+    "max. PAR (\u00b5mol/m\u00b2/s)",
+    "Tlog (degC)",
+    "CO2 (ppm)"
+  ],
+  "borders": {
+    "start": [
+      0,
+      5813,
+      6692
+    ],
+    "end": [
+      6149,
+      7028,
+      8785
+    ]
+  },
+  "n_windows": {
+    "train": 5718,
+    "val": 784,
+    "test": 1662
+  },
+  "metrics": {
+    "mse": 0.2902567386627197,
+    "mae": 0.34034284949302673,
+    "per_horizon_mse_at": {
+      "1": 0.06039232760667801,
+      "24": 0.2514186203479767,
+      "48": 0.3122318983078003,
+      "96": 0.35363510251045227
+    }
+  },
+  "fit": {
+    "epochs": 7,
+    "best_epoch": 4,
+    "best_val": 0.6564649343490601,
+    "seconds": 3.254122173999349,
+    "stopped_early": true,
+    "history": [
+      {
+        "epoch": 1,
+        "train": 0.6000753236675896,
+        "val": 0.6945481300354004,
+        "lr": 0.005
+      },
+      {
+        "epoch": 2,
+        "train": 0.5479215730545862,
+        "val": 0.6759729385375977,
+        "lr": 0.0025
+      },
+      {
+        "epoch": 3,
+        "train": 0.5410607149651852,
+        "val": 0.6681842803955078,
+        "lr": 0.00125
+      },
+      {
+        "epoch": 4,
+        "train": 0.5373330733270735,
+        "val": 0.6564649343490601,
+        "lr": 0.000625
+      },
+      {
+        "epoch": 5,
+        "train": 0.5351173985500609,
+        "val": 0.660760760307312,
+        "lr": 0.0003125
+      },
+      {
+        "epoch": 6,
+        "train": 0.5337959085573221,
+        "val": 0.6585623621940613,
+        "lr": 0.00015625
+      },
+      {
+        "epoch": 7,
+        "train": 0.5332652367716613,
+        "val": 0.6583396196365356,
+        "lr": 7.8125e-05
+      }
+    ]
+  },
+  "inference_seconds": 0.16968154799906188,
+  "n_parameters": 32352,
+  "state_sha256": "8c3f4e575c761f7665ddedf07f0a566aa8bc05e6ceea81aa77d44503316217e6",
+  "env": {
+    "torch": "2.14.1+cu130",
+    "python": "3.13.16",
+    "threads": 1
+  }
+}

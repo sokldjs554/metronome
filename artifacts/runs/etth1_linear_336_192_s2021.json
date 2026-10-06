@@ -1,0 +1,108 @@
+{
+  "config": {
+    "dataset": "etth1",
+    "kind": "etth",
+    "model": "linear",
+    "lookback": 336,
+    "horizon": 192,
+    "seed": 2021,
+    "train": {
+      "lr": 0.005,
+      "batch_size": 32,
+      "max_epochs": 20,
+      "patience": 3,
+      "lr_schedule": "halving",
+      "pct_start": 0.3,
+      "loss": "mse",
+      "threads": 1,
+      "eval_batch_size": 1024,
+      "grad_clip": null
+    },
+    "model_kwargs": {},
+    "tag": ""
+  },
+  "dataset_content_sha256": "ff12d69692f938ac5ce1c71d549f02a80b293b61e83ae53386a4054d7658fc4a",
+  "channels": [
+    "HUFL",
+    "HULL",
+    "MUFL",
+    "MULL",
+    "LUFL",
+    "LULL",
+    "OT"
+  ],
+  "borders": {
+    "start": [
+      0,
+      8304,
+      11184
+    ],
+    "end": [
+      8640,
+      11520,
+      14400
+    ]
+  },
+  "n_windows": {
+    "train": 8113,
+    "val": 2689,
+    "test": 2689
+  },
+  "metrics": {
+    "mse": 0.43193942308425903,
+    "mae": 0.4418843686580658,
+    "per_horizon_mse_at": {
+      "1": 0.11690076440572739,
+      "24": 0.32601940631866455,
+      "48": 0.3658502399921417,
+      "96": 0.46088385581970215
+    }
+  },
+  "fit": {
+    "epochs": 5,
+    "best_epoch": 2,
+    "best_val": 0.8580295783119514,
+    "seconds": 2.786599623999791,
+    "stopped_early": true,
+    "history": [
+      {
+        "epoch": 1,
+        "train": 0.44683147960800607,
+        "val": 0.8887591069185321,
+        "lr": 0.005
+      },
+      {
+        "epoch": 2,
+        "train": 0.40394695829951366,
+        "val": 0.8580295783119514,
+        "lr": 0.0025
+      },
+      {
+        "epoch": 3,
+        "train": 0.3951557523869534,
+        "val": 0.8797433453228626,
+        "lr": 0.00125
+      },
+      {
+        "epoch": 4,
+        "train": 0.3899178909128432,
+        "val": 0.8688997482003311,
+        "lr": 0.000625
+      },
+      {
+        "epoch": 5,
+        "train": 0.38750598795916785,
+        "val": 0.8765068568674416,
+        "lr": 0.0003125
+      }
+    ]
+  },
+  "inference_seconds": 0.059235296001133975,
+  "n_parameters": 64704,
+  "state_sha256": "2c4ebb63e0b51e5fbb859994ba9ae1a602fe4ec7380cced5e3ff63346f9027b9",
+  "env": {
+    "torch": "2.14.1+cu130",
+    "python": "3.13.16",
+    "threads": 1
+  }
+}

@@ -1,0 +1,413 @@
+{
+ "note": "사전 등록 프로토콜(docs/protocol.md)의 오프라인 실험. DLinear 콜드 재학습 캐시, 시드 3개 평균, 고정 척도 MAE.",
+ "datasets": {
+  "etth1": {
+   "policies": [
+    {
+     "policy": "never",
+     "mae": 0.471342011916199,
+     "n_refits": 0.0
+    },
+    {
+     "policy": "periodic-1",
+     "mae": 0.4699920203241337,
+     "n_refits": 364.0
+    },
+    {
+     "policy": "periodic-1+gate",
+     "mae": 0.46966147564526106,
+     "n_refits": 22.0
+    },
+    {
+     "policy": "periodic-3",
+     "mae": 0.4705494301916974,
+     "n_refits": 121.0
+    },
+    {
+     "policy": "periodic-3+gate",
+     "mae": 0.4680190638800877,
+     "n_refits": 17.0
+    },
+    {
+     "policy": "periodic-7",
+     "mae": 0.47053504394283596,
+     "n_refits": 52.0
+    },
+    {
+     "policy": "periodic-7+gate",
+     "mae": 0.46910243404733426,
+     "n_refits": 17.0
+    },
+    {
+     "policy": "periodic-14",
+     "mae": 0.4705118258515347,
+     "n_refits": 26.0
+    },
+    {
+     "policy": "periodic-14+gate",
+     "mae": 0.47015302246080143,
+     "n_refits": 14.0
+    },
+    {
+     "policy": "periodic-30",
+     "mae": 0.4717909187587577,
+     "n_refits": 12.0
+    },
+    {
+     "policy": "periodic-30+gate",
+     "mae": 0.47522414134272795,
+     "n_refits": 5.0
+    },
+    {
+     "policy": "periodic-60",
+     "mae": 0.47074156969553177,
+     "n_refits": 6.0
+    },
+    {
+     "policy": "periodic-60+gate",
+     "mae": 0.47297581313466586,
+     "n_refits": 4.0
+    },
+    {
+     "policy": "periodic-90",
+     "mae": 0.47001067775394406,
+     "n_refits": 4.0
+    },
+    {
+     "policy": "periodic-90+gate",
+     "mae": 0.47051855124388453,
+     "n_refits": 1.0
+    },
+    {
+     "policy": "ratio-0.1",
+     "mae": 0.47530693454549305,
+     "n_refits": 6.0
+    },
+    {
+     "policy": "ratio-0.1+gate",
+     "mae": 0.4751735278327904,
+     "n_refits": 3.0
+    },
+    {
+     "policy": "ratio-0.2",
+     "mae": 0.47176463619910036,
+     "n_refits": 4.0
+    },
+    {
+     "policy": "ratio-0.2+gate",
+     "mae": 0.4751735278327904,
+     "n_refits": 3.0
+    },
+    {
+     "policy": "ratio-0.3",
+     "mae": 0.5467157653346787,
+     "n_refits": 4.0
+    },
+    {
+     "policy": "ratio-0.3+gate",
+     "mae": 0.4860927973142966,
+     "n_refits": 2.0
+    },
+    {
+     "policy": "ratio-0.5",
+     "mae": 0.5429105010498942,
+     "n_refits": 2.0
+    },
+    {
+     "policy": "ratio-0.5+gate",
+     "mae": 0.46977733097067514,
+     "n_refits": 1.0
+    },
+    {
+     "policy": "ph-0.05",
+     "mae": 0.47030032482391154,
+     "n_refits": 26.0
+    },
+    {
+     "policy": "ph-0.05+gate",
+     "mae": 0.47095270497535335,
+     "n_refits": 12.0
+    },
+    {
+     "policy": "ph-0.1",
+     "mae": 0.46859702542325476,
+     "n_refits": 22.0
+    },
+    {
+     "policy": "ph-0.1+gate",
+     "mae": 0.471135481527275,
+     "n_refits": 12.0
+    },
+    {
+     "policy": "ph-0.2",
+     "mae": 0.4712107969337542,
+     "n_refits": 15.0
+    },
+    {
+     "policy": "ph-0.2+gate",
+     "mae": 0.471779295649681,
+     "n_refits": 10.0
+    },
+    {
+     "policy": "ph-0.4",
+     "mae": 0.46993728934761286,
+     "n_refits": 12.0
+    },
+    {
+     "policy": "ph-0.4+gate",
+     "mae": 0.4715301389311767,
+     "n_refits": 9.0
+    },
+    {
+     "policy": "adwin-0.001",
+     "mae": 0.471342011916199,
+     "n_refits": 0.0
+    },
+    {
+     "policy": "adwin-0.001+gate",
+     "mae": 0.471342011916199,
+     "n_refits": 0.0
+    },
+    {
+     "policy": "adwin-0.01",
+     "mae": 0.4701168843897469,
+     "n_refits": 1.0
+    },
+    {
+     "policy": "adwin-0.01+gate",
+     "mae": 0.4701168843897469,
+     "n_refits": 1.0
+    },
+    {
+     "policy": "adwin-0.1",
+     "mae": 0.47054012689342256,
+     "n_refits": 1.0
+    },
+    {
+     "policy": "adwin-0.1+gate",
+     "mae": 0.471342011916199,
+     "n_refits": 0.0
+    },
+    {
+     "policy": "adwin-0.3",
+     "mae": 0.4714491480676527,
+     "n_refits": 2.0
+    },
+    {
+     "policy": "adwin-0.3+gate",
+     "mae": 0.4697337828420451,
+     "n_refits": 1.0
+    }
+   ],
+   "representative": {
+    "policy": "ph-0.1",
+    "mae": 0.46859702542325476,
+    "n_refits": 22.0
+   }
+  },
+  "etth2": {
+   "policies": [
+    {
+     "policy": "never",
+     "mae": 0.3335872762602483,
+     "n_refits": 0.0
+    },
+    {
+     "policy": "periodic-1",
+     "mae": 0.3161822171538895,
+     "n_refits": 364.0
+    },
+    {
+     "policy": "periodic-1+gate",
+     "mae": 0.313418411741692,
+     "n_refits": 20.0
+    },
+    {
+     "policy": "periodic-3",
+     "mae": 0.3170721588701561,
+     "n_refits": 121.0
+    },
+    {
+     "policy": "periodic-3+gate",
+     "mae": 0.32063765261215366,
+     "n_refits": 19.0
+    },
+    {
+     "policy": "periodic-7",
+     "mae": 0.3149920035482446,
+     "n_refits": 52.0
+    },
+    {
+     "policy": "periodic-7+gate",
+     "mae": 0.31512055326678773,
+     "n_refits": 18.0
+    },
+    {
+     "policy": "periodic-14",
+     "mae": 0.31619246042414245,
+     "n_refits": 26.0
+    },
+    {
+     "policy": "periodic-14+gate",
+     "mae": 0.31370817662672773,
+     "n_refits": 17.0
+    },
+    {
+     "policy": "periodic-30",
+     "mae": 0.3164038375650587,
+     "n_refits": 12.0
+    },
+    {
+     "policy": "periodic-30+gate",
+     "mae": 0.314346967799734,
+     "n_refits": 5.0
+    },
+    {
+     "policy": "periodic-60",
+     "mae": 0.3176023249134987,
+     "n_refits": 6.0
+    },
+    {
+     "policy": "periodic-60+gate",
+     "mae": 0.32153854702384504,
+     "n_refits": 2.0
+    },
+    {
+     "policy": "periodic-90",
+     "mae": 0.3217587116190688,
+     "n_refits": 4.0
+    },
+    {
+     "policy": "periodic-90+gate",
+     "mae": 0.32323884368939465,
+     "n_refits": 2.0
+    },
+    {
+     "policy": "ratio-0.1",
+     "mae": 0.320487333251722,
+     "n_refits": 8.0
+    },
+    {
+     "policy": "ratio-0.1+gate",
+     "mae": 0.32489718500003884,
+     "n_refits": 6.0
+    },
+    {
+     "policy": "ratio-0.2",
+     "mae": 0.32312238136451654,
+     "n_refits": 4.0
+    },
+    {
+     "policy": "ratio-0.2+gate",
+     "mae": 0.32312238136451654,
+     "n_refits": 4.0
+    },
+    {
+     "policy": "ratio-0.3",
+     "mae": 0.32350555784342566,
+     "n_refits": 3.0
+    },
+    {
+     "policy": "ratio-0.3+gate",
+     "mae": 0.32350555784342566,
+     "n_refits": 3.0
+    },
+    {
+     "policy": "ratio-0.5",
+     "mae": 0.3242900742242794,
+     "n_refits": 1.0
+    },
+    {
+     "policy": "ratio-0.5+gate",
+     "mae": 0.3242900742242794,
+     "n_refits": 1.0
+    },
+    {
+     "policy": "ph-0.05",
+     "mae": 0.31842032335503617,
+     "n_refits": 26.0
+    },
+    {
+     "policy": "ph-0.05+gate",
+     "mae": 0.316838089277852,
+     "n_refits": 14.0
+    },
+    {
+     "policy": "ph-0.1",
+     "mae": 0.3178741653747637,
+     "n_refits": 19.0
+    },
+    {
+     "policy": "ph-0.1+gate",
+     "mae": 0.3212671171376177,
+     "n_refits": 12.0
+    },
+    {
+     "policy": "ph-0.2",
+     "mae": 0.32878192584396576,
+     "n_refits": 15.0
+    },
+    {
+     "policy": "ph-0.2+gate",
+     "mae": 0.31610058955896553,
+     "n_refits": 10.0
+    },
+    {
+     "policy": "ph-0.4",
+     "mae": 0.3254814773110346,
+     "n_refits": 8.0
+    },
+    {
+     "policy": "ph-0.4+gate",
+     "mae": 0.3249417091076799,
+     "n_refits": 6.0
+    },
+    {
+     "policy": "adwin-0.001",
+     "mae": 0.3335872762602483,
+     "n_refits": 0.0
+    },
+    {
+     "policy": "adwin-0.001+gate",
+     "mae": 0.3335872762602483,
+     "n_refits": 0.0
+    },
+    {
+     "policy": "adwin-0.01",
+     "mae": 0.3335872762602483,
+     "n_refits": 0.0
+    },
+    {
+     "policy": "adwin-0.01+gate",
+     "mae": 0.3335872762602483,
+     "n_refits": 0.0
+    },
+    {
+     "policy": "adwin-0.1",
+     "mae": 0.3335872762602483,
+     "n_refits": 0.0
+    },
+    {
+     "policy": "adwin-0.1+gate",
+     "mae": 0.3335872762602483,
+     "n_refits": 0.0
+    },
+    {
+     "policy": "adwin-0.3",
+     "mae": 0.3266381145857676,
+     "n_refits": 1.0
+    },
+    {
+     "policy": "adwin-0.3+gate",
+     "mae": 0.3266381145857676,
+     "n_refits": 1.0
+    }
+   ],
+   "representative": {
+    "policy": "ph-0.1",
+    "mae": 0.3178741653747637,
+    "n_refits": 19.0
+   }
+  }
+ }
+}

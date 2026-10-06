@@ -121,7 +121,8 @@ def test_summarize_ltsf_compares_with_paper(tmp_path: Path) -> None:
     }
     (runs / "etth1_dlinear_336_96_s2021.json").write_text(json.dumps(report))
     out = summarize_ltsf(runs, ROOT / "artifacts" / "paper_reference.json")
-    row = out["runs"]["etth1.dlinear.96"]
+    row = out["runs"]["etth1.dlinear.96.s2021"]
+    assert out["configs"]["etth1.dlinear.96"]["n_seeds"] == 1
     assert row["paper"]["mse"] == 0.375 and row["within_3pct"] and abs(row["mse_rel_diff_pct"] - 1.333) < 0.01
 
 

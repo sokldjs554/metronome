@@ -1,0 +1,83 @@
+{
+  "config": {
+    "dataset": "electricity20",
+    "kind": "other",
+    "model": "naive",
+    "lookback": 336,
+    "horizon": 96,
+    "seed": 2021,
+    "train": {
+      "lr": 0.005,
+      "batch_size": 32,
+      "max_epochs": 20,
+      "patience": 3,
+      "lr_schedule": "halving",
+      "pct_start": 0.3,
+      "loss": "mse",
+      "threads": 1,
+      "eval_batch_size": 1024,
+      "grad_clip": null
+    },
+    "model_kwargs": {},
+    "tag": ""
+  },
+  "dataset_content_sha256": "ba670957e80deb841a0ac03b2110a51c2615f73eb4d596bd8ad9d719f71a5fdf",
+  "channels": [
+    "column_9",
+    "column_25",
+    "column_32",
+    "column_55",
+    "column_57",
+    "column_96",
+    "column_111",
+    "column_112",
+    "column_115",
+    "column_144",
+    "column_196",
+    "column_200",
+    "column_209",
+    "column_222",
+    "column_228",
+    "column_248",
+    "column_258",
+    "column_260",
+    "column_273",
+    "column_286"
+  ],
+  "borders": {
+    "start": [
+      0,
+      18076,
+      20708
+    ],
+    "end": [
+      18412,
+      21044,
+      26304
+    ]
+  },
+  "n_windows": {
+    "train": 17981,
+    "val": 2537,
+    "test": 5165
+  },
+  "metrics": {
+    "mse": 1.595335841178894,
+    "mae": 0.9574410319328308,
+    "per_horizon_mse_at": {
+      "1": 0.16772937774658203,
+      "24": 0.16680432856082916,
+      "48": 0.2294292449951172,
+      "96": 0.26000866293907166
+    }
+  },
+  "fit": null,
+  "inference_seconds": 0.15234859100019094,
+  "n_parameters": 0,
+  "state_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "env": {
+    "torch": "2.14.1+cu130",
+    "python": "3.13.16",
+    "threads": 1
+  }
+}

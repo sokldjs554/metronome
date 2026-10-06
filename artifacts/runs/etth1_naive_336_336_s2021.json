@@ -1,0 +1,70 @@
+{
+  "config": {
+    "dataset": "etth1",
+    "kind": "etth",
+    "model": "naive",
+    "lookback": 336,
+    "horizon": 336,
+    "seed": 2021,
+    "train": {
+      "lr": 0.005,
+      "batch_size": 32,
+      "max_epochs": 20,
+      "patience": 3,
+      "lr_schedule": "halving",
+      "pct_start": 0.3,
+      "loss": "mse",
+      "threads": 1,
+      "eval_batch_size": 1024,
+      "grad_clip": null
+    },
+    "model_kwargs": {},
+    "tag": ""
+  },
+  "dataset_content_sha256": "ff12d69692f938ac5ce1c71d549f02a80b293b61e83ae53386a4054d7658fc4a",
+  "channels": [
+    "HUFL",
+    "HULL",
+    "MUFL",
+    "MULL",
+    "LUFL",
+    "LULL",
+    "OT"
+  ],
+  "borders": {
+    "start": [
+      0,
+      8304,
+      11184
+    ],
+    "end": [
+      8640,
+      11520,
+      14400
+    ]
+  },
+  "n_windows": {
+    "train": 7969,
+    "val": 2545,
+    "test": 2545
+  },
+  "metrics": {
+    "mse": 1.3299273252487183,
+    "mae": 0.7459721565246582,
+    "per_horizon_mse_at": {
+      "1": 0.1795816421508789,
+      "24": 0.4209305942058563,
+      "48": 0.4688996374607086,
+      "96": 0.6101859211921692
+    }
+  },
+  "fit": null,
+  "inference_seconds": 0.22884293399874878,
+  "n_parameters": 0,
+  "state_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "env": {
+    "torch": "2.14.1+cu130",
+    "python": "3.13.16",
+    "threads": 1
+  }
+}

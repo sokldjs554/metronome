@@ -1,0 +1,25 @@
+{
+  "url": "http://127.0.0.1:8000",
+  "model": "v0002",
+  "n": 300,
+  "warmup": 50,
+  "request": {
+    "lookback": 336,
+    "channels": 7,
+    "horizon": 96
+  },
+  "http_ms": {
+    "p50": 4.410026499954256,
+    "p95": 10.29625119986122,
+    "p99": 11.887950099826412,
+    "mean": 5.576026593307688
+  },
+  "model_call_ms": {
+    "p50": 0.16714400044293143,
+    "p95": 0.22611440044784104
+  },
+  "requests_per_s_serial": 179.33917338202684,
+  "client": "httpx sync, keep-alive, loopback, serial",
+  "machine": "x86_64",
+  "python": "3.13.16"
+}
