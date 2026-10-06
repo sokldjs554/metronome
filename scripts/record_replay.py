@@ -39,10 +39,10 @@ def dlinear_weights(onnx_path: Path) -> dict[str, object]:
     def b64(a: np.ndarray) -> str:
         return base64.b64encode(np.ascontiguousarray(a, dtype=np.float32).tobytes()).decode()
 
-    h, l = picked["seasonal_w"].shape
+    h, lb = picked["seasonal_w"].shape
     return {
         "horizon": int(h),
-        "lookback": int(l),
+        "lookback": int(lb),
         "seasonal_w": b64(picked["seasonal_w"]),
         "seasonal_b": b64(picked["seasonal_b"]),
         "trend_w": b64(picked["trend_w"]),
@@ -80,7 +80,9 @@ def main() -> None:
         if r["stepped"] == 0 or pos["cursor"] >= pos["n_rows"]:
             break
         if len(steps) % 30 == 0:
-            print(f"  {pos['current_time'][:10]} alarms={len(alarms)} requests={len(requests)} {time.time() - t0:.0f}s")
+            print(
+                f"  {pos['current_time'][:10]} alarms={len(alarms)} requests={len(requests)} {time.time() - t0:.0f}s"
+            )
     events = c.get("/v1/events").json()
     models = c.get("/v1/models").json()
     monitor = c.get("/v1/monitor").json()
@@ -100,7 +102,13 @@ def main() -> None:
         )
     record = {
         "deployment": dep,
-        "replay": {"start_row": start["cursor"], "n_rows": start["n_rows"], "steps": len(steps), "wall_seconds": time.time() - t0, "waited_for_worker_s": blocked_total},
+        "replay": {
+            "start_row": start["cursor"],
+            "n_rows": start["n_rows"],
+            "steps": len(steps),
+            "wall_seconds": time.time() - t0,
+            "waited_for_worker_s": blocked_total,
+        },
         "alarms": alarms,
         "retrain_requests": requests,
         "swaps": events["swaps"],
