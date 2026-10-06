@@ -1,0 +1,299 @@
+{
+  "url": "http://127.0.0.1:8000",
+  "started": "2026-10-06T07:17:59Z",
+  "first_version": "v0001",
+  "03-retrain-requested.png": {
+    "job": "20261006T071805Z-504",
+    "trigger": "detector",
+    "alarms": [
+      {
+        "day": "2017-07-02",
+        "mae": 0.4568459093570709,
+        "detectors": [
+          "ph-0.1"
+        ],
+        "baseline": 0.34715014696121216
+      }
+    ],
+    "cutoff_row": 8905,
+    "cutoff_time": "2017-07-07T00:00:00.000000000",
+    "active_version": "v0001"
+  },
+  "swap": {
+    "at": 1791271095.4352946,
+    "from": "v0001",
+    "to": "v0002",
+    "reason": "worker"
+  },
+  "steps_to_swap": 39,
+  "swapped": true,
+  "monitor": {
+    "active_version": "v0002",
+    "pending_jobs": [],
+    "baseline_val_mae": 0.374260276556015,
+    "judged_version": "v0002",
+    "skipped_days": 4,
+    "rolling_7d_mae": 0.5092848168597335,
+    "resolved_forecasts": 386,
+    "pending_forecasts": 95,
+    "days_closed": 17,
+    "current_day": "2017-07-13",
+    "detectors": [
+      {
+        "name": "ratio-0.2",
+        "baseline": 0.374260276556015,
+        "rolling": 0.5144582096901206,
+        "threshold": 0.449112331867218,
+        "window_filled": 6
+      },
+      {
+        "name": "ph-0.1",
+        "n": 6,
+        "mean": 0.5144582096901205,
+        "statistic": 0.29664549560182624,
+        "threshold": 0.1
+      },
+      {
+        "name": "adwin-0.01",
+        "width": 6,
+        "mean": 0.5144582096901206,
+        "delta": 0.01
+      }
+    ],
+    "alarms": [
+      {
+        "day": "2017-07-02",
+        "mae": 0.4568459093570709,
+        "detectors": [
+          "ph-0.1"
+        ],
+        "baseline": 0.34715014696121216
+      }
+    ],
+    "last_alarm_day": "2017-07-02",
+    "daily": [
+      {
+        "day": "2017-06-26",
+        "mae": 0.32722193002700806,
+        "n": 1,
+        "versions": [
+          "v0001"
+        ]
+      },
+      {
+        "day": "2017-06-27",
+        "mae": 0.36029067635536194,
+        "n": 24,
+        "versions": [
+          "v0001"
+        ]
+      },
+      {
+        "day": "2017-06-28",
+        "mae": 0.42575695241491,
+        "n": 24,
+        "versions": [
+          "v0001"
+        ]
+      },
+      {
+        "day": "2017-06-29",
+        "mae": 0.39997682720422745,
+        "n": 24,
+        "versions": [
+          "v0001"
+        ]
+      },
+      {
+        "day": "2017-06-30",
+        "mae": 0.38563723117113113,
+        "n": 24,
+        "versions": [
+          "v0001"
+        ]
+      },
+      {
+        "day": "2017-07-01",
+        "mae": 0.37918241570393246,
+        "n": 24,
+        "versions": [
+          "v0001"
+        ]
+      },
+      {
+        "day": "2017-07-02",
+        "mae": 0.4568459093570709,
+        "n": 24,
+        "versions": [
+          "v0001"
+        ]
+      },
+      {
+        "day": "2017-07-03",
+        "mae": 0.5446686136225859,
+        "n": 24,
+        "versions": [
+          "v0001"
+        ]
+      },
+      {
+        "day": "2017-07-04",
+        "mae": 0.5973845347762108,
+        "n": 24,
+        "versions": [
+          "v0001"
+        ]
+      },
+      {
+        "day": "2017-07-05",
+        "mae": 0.6115907902518908,
+        "n": 24,
+        "versions": [
+          "v0001"
+        ]
+      },
+      {
+        "day": "2017-07-06",
+        "mae": 0.47824445987741154,
+        "n": 24,
+        "versions": [
+          "v0001"
+        ]
+      },
+      {
+        "day": "2017-07-07",
+        "mae": 0.43800637498497963,
+        "n": 24,
+        "versions": [
+          "v0002"
+        ]
+      },
+      {
+        "day": "2017-07-08",
+        "mae": 0.45987287908792496,
+        "n": 24,
+        "versions": [
+          "v0002"
+        ]
+      },
+      {
+        "day": "2017-07-09",
+        "mae": 0.4354308421413104,
+        "n": 24,
+        "versions": [
+          "v0002"
+        ]
+      },
+      {
+        "day": "2017-07-10",
+        "mae": 0.4608423250416915,
+        "n": 24,
+        "versions": [
+          "v0002"
+        ]
+      },
+      {
+        "day": "2017-07-11",
+        "mae": 0.5998343353470167,
+        "n": 24,
+        "versions": [
+          "v0002"
+        ]
+      },
+      {
+        "day": "2017-07-12",
+        "mae": 0.6927625015377998,
+        "n": 24,
+        "versions": [
+          "v0002"
+        ]
+      }
+    ]
+  },
+  "models": {
+    "active": {
+      "version": "v0002",
+      "created_at": "2026-10-06T07:18:15Z",
+      "metrics": {
+        "val_mae_fixed": 0.374260276556015,
+        "val_mse_standardized": 0.2714388370513916,
+        "epochs": 10,
+        "train_seconds": 9.565506717000062,
+        "n_train_windows": 8138,
+        "state_sha256": "a2180b1dfb951e4ce8b126bc00bd4ffadd655999498f2d69583b1393335464e5",
+        "export_parity_max_abs_diff": 7.152557373046875e-07
+      },
+      "onnx_sha256": "9be2dc0b3dcfcbc5956d441779413234bca3d263d69ce2cd05babba706f83c5a",
+      "parity_max_abs_diff": 7.152557373046875e-07,
+      "provenance": {
+        "job_id": "20261006T071805Z-504",
+        "trigger": "detector",
+        "cutoff_row": 8905,
+        "cutoff_time": "2017-07-07T00:00:00.000000000",
+        "train_rows": [
+          0,
+          8905
+        ],
+        "model": "dlinear",
+        "seed": 0,
+        "stream_file": "/home/user/chartwire/metronome/registry/etth1/stream.npz"
+      }
+    },
+    "versions": [
+      {
+        "version": "v0001",
+        "created_at": "2026-10-06T07:17:56Z",
+        "metrics": {
+          "val_mae_fixed": 0.34715014696121216,
+          "val_mse_standardized": 0.2537443935871124,
+          "epochs": 8,
+          "train_seconds": 11.35698501600018,
+          "n_train_windows": 7897,
+          "state_sha256": "8ccce2e96169b01aef0029603ffdd3d330e4aed1529b25c81618dd6e5871ccf1",
+          "export_parity_max_abs_diff": 5.960464477539062e-07
+        },
+        "provenance": {
+          "trigger": "initial",
+          "cutoff_row": 8664,
+          "cutoff_time": "2017-06-26T23:00:00.000000000",
+          "train_rows": [
+            0,
+            8664
+          ],
+          "model": "dlinear",
+          "seed": 0,
+          "dataset_content_sha256": "ff12d69692f938ac5ce1c71d549f02a80b293b61e83ae53386a4054d7658fc4a"
+        },
+        "onnx_sha256": "41392ae7ed3790966970fcb5b68e01af19740c1bedb3bb789b18d5efab3ced74"
+      },
+      {
+        "version": "v0002",
+        "created_at": "2026-10-06T07:18:15Z",
+        "metrics": {
+          "val_mae_fixed": 0.374260276556015,
+          "val_mse_standardized": 0.2714388370513916,
+          "epochs": 10,
+          "train_seconds": 9.565506717000062,
+          "n_train_windows": 8138,
+          "state_sha256": "a2180b1dfb951e4ce8b126bc00bd4ffadd655999498f2d69583b1393335464e5",
+          "export_parity_max_abs_diff": 7.152557373046875e-07
+        },
+        "provenance": {
+          "job_id": "20261006T071805Z-504",
+          "trigger": "detector",
+          "cutoff_row": 8905,
+          "cutoff_time": "2017-07-07T00:00:00.000000000",
+          "train_rows": [
+            0,
+            8905
+          ],
+          "model": "dlinear",
+          "seed": 0,
+          "stream_file": "/home/user/chartwire/metronome/registry/etth1/stream.npz"
+        },
+        "onnx_sha256": "9be2dc0b3dcfcbc5956d441779413234bca3d263d69ce2cd05babba706f83c5a"
+      }
+    ],
+    "load_error": null
+  }
+}
