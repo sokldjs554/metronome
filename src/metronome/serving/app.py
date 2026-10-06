@@ -272,7 +272,7 @@ def create_app(
         if rolling is not None:
             state.m_rolling.set(rolling)
         result["retrain_requested"] = None
-        if result["alarms"] and state.auto_retrain and not state.registry.pending_jobs():
+        if result["alarms"] and state.auto_retrain and not state.registry.open_jobs():
             result["retrain_requested"] = state.request_retrain(
                 {"trigger": "detector", "alarms": result["alarms"]}
             )
@@ -283,7 +283,7 @@ def create_app(
     def monitor() -> dict[str, Any]:
         return {
             "active_version": state.active.model.version if state.active.model else None,
-            "pending_jobs": [p.stem for p in state.registry.pending_jobs()],
+            "pending_jobs": [p.stem for p in state.registry.open_jobs()],
             **state.monitor.state(),
         }
 
@@ -352,7 +352,7 @@ def create_app(
             for _ in range(req.steps):
                 if rp.cursor >= rp.n_rows:
                     break
-                if rp.wait_for_retrain and state.registry.pending_jobs():
+                if rp.wait_for_retrain and state.registry.open_jobs():
                     blocked = (
                         True  # the stream waits for the worker, as the offline protocol assumes a one-day lag
                     )
@@ -370,12 +370,12 @@ def create_app(
                 day = str(rp.timestamps[rp.cursor - 1].astype("datetime64[D]"))
                 if result["alarms"]:
                     alarms.extend(result["alarms"])
-                    if state.auto_retrain and not state.registry.pending_jobs():
+                    if state.auto_retrain and not state.registry.open_jobs():
                         requests.append(
                             state.request_retrain({"trigger": "detector", "alarms": result["alarms"]})
                         )
                         rp.last_retrain_day = day
-                if rp.retrain_schedule_days and _day_boundary(rp) and not state.registry.pending_jobs():
+                if rp.retrain_schedule_days and _day_boundary(rp) and not state.registry.open_jobs():
                     last = rp.last_retrain_day
                     if last is None or _days_between(last, day) >= rp.retrain_schedule_days:
                         requests.append(

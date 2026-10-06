@@ -33,6 +33,7 @@ class Point:
     kind: str
     y_lo: float | None = None
     y_hi: float | None = None
+    hollow: bool = False  # gated variant of the same policy
 
 
 @dataclass
@@ -112,7 +113,7 @@ def pareto_chart(
             parts.append(
                 f"<rect x='{x(p.x) - 4:.1f}' y='{y(p.y) - 4:.1f}' width='8' height='8' fill='{color}'><title>{_esc(p.label)}</title></rect>"
             )
-        if p.kind in ("never", "periodic", "warm"):
+        if p.kind in ("never", "periodic", "warm") and not p.hollow:
             parts.append(
                 f"<text x='{x(p.x) + 6:.1f}' y='{y(p.y) - 6:.1f}' font-size='10' fill='{color}'>{_esc(p.label)}</text>"
             )

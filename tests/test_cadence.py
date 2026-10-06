@@ -96,7 +96,8 @@ def test_triggered_schedule_refits_after_injected_drift(small_cfg: tuple[CacheCo
         horizon=cfg.horizon,
         config={"seed": 0},
     )
-    refits = schedule_triggered(cache, "ratio-0.2")
+    refits, rejected = schedule_triggered(cache, "ratio-0.2")
+    assert rejected == []
     assert refits and 15 + 4 <= refits[0] <= 15 + 4 + 7
     res = evaluate_schedule(cache, "ratio-0.2", refits)
     never = evaluate_schedule(cache, "never", [])
@@ -109,3 +110,39 @@ def test_warm_chain_runs(small_cfg: tuple[CacheConfig, Path, Path]) -> None:
     z = np.load(out)
     assert z["abs_next"].shape == (20, 3) and np.isfinite(z["abs_next"]).all()
     assert z["train_seconds"][1:].min() > 0
+
+
+def test_gate_rejects_candidates_that_lose_to_the_incumbent(
+    small_cfg: tuple[CacheConfig, Path, Path],
+) -> None:
+    """Models trained on days 10-19 are bad (high val MAE and worse errors); the gate keeps model 0."""
+    from metronome.cadence.simulate import gate_schedule, run_policies
+
+    cfg, _, _ = small_cfg
+    n, c = 30, 1
+    abs_sum = np.full((n, n, c), np.nan)
+    val = np.full(n, 0.10)
+    for m in range(n):
+        level = 0.30 if 10 <= m < 20 else (0.08 if m >= 25 else 0.10)
+        val[m] = 0.11 if m == 5 else level  # day 5: slightly worse than the incumbent's realized 0.10
+        for d in range(m, n):
+            abs_sum[m, d] = level * 24 * cfg.horizon
+    cache = Cache(
+        name="fake",
+        abs_sum=abs_sum,
+        sq_sum=abs_sum**2,
+        count=np.full(n, 24),
+        train_seconds=np.ones(n),
+        val_mae_fixed=val,
+        horizon=cfg.horizon,
+        config={"seed": 0},
+    )
+    accepted, rejected = gate_schedule(cache, [5, 12, 15, 25])
+    assert accepted == [25] and rejected == [5, 12, 15]  # 5 and 12/15 lose to model 0; 25 wins
+    res = run_policies(cache, periodic=(5,), triggered=("ratio-0.2",))
+    assert res["periodic-5+gate"].mae <= res["periodic-5"].mae
+    assert res["periodic-5+gate"].n_trained == res["periodic-5"].n_refits
+    assert (
+        res["periodic-5+gate"].n_refits + len(res["periodic-5+gate"].rejected_days)
+        == res["periodic-5"].n_refits
+    )

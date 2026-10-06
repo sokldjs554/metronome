@@ -27,7 +27,11 @@ def _mean(xs: list[float]) -> float:
 
 
 def _policy_kind(policy: str) -> str:
-    return policy.split("-")[0]
+    return policy.split("+")[0].split("-")[0]
+
+
+def _is_gated(policy: str) -> bool:
+    return policy.endswith("+gate")
 
 
 def summarize_cadence(cadence_dir: Path) -> dict[str, Any]:
@@ -67,12 +71,14 @@ def summarize_cadence(cadence_dir: Path) -> dict[str, Any]:
             ]
             policies[policy] = {
                 "kind": _policy_kind(policy),
+                "gated": _is_gated(policy),
                 "n_seeds": len(rows),
                 "mae_mean": _mean(maes),
                 "mae_min": min(maes),
                 "mae_max": max(maes),
                 "mse_mean": _mean([r["mse"] for r in rows]),
                 "n_refits_mean": _mean([r["n_refits"] for r in rows]),
+                "n_trained_mean": _mean([r.get("n_trained", r["n_refits"]) for r in rows]),
                 "n_refits_min": min(r["n_refits"] for r in rows),
                 "n_refits_max": max(r["n_refits"] for r in rows),
                 "train_seconds_mean": _mean([r["train_seconds"] for r in rows]),
@@ -107,14 +113,15 @@ def _ci(comps: list[dict[str, Any]]) -> dict[str, float] | None:
     }
 
 
-def _policy_sort_key(p: str) -> tuple[int, float]:
-    kind, _, val = p.partition("-")
+def _policy_sort_key(p: str) -> tuple[int, float, int]:
+    base, _, gate = p.partition("+")
+    kind, _, val = base.partition("-")
     order = {"never": 0, "periodic": 1, "warm": 2, "ratio": 3, "ph": 4, "adwin": 5}
     try:
         v = float(val)
     except ValueError:
         v = 0.0
-    return order.get(kind, 9), v
+    return order.get(kind, 9), v, 1 if gate else 0
 
 
 def judge_hypotheses(summary: dict[str, Any]) -> dict[str, Any]:

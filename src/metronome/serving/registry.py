@@ -211,15 +211,23 @@ class Registry:
         _atomic_write(path, json.dumps({"job_id": job_id, "status": "requested", **reason}, indent=2))
         return path
 
-    def pending_jobs(self) -> list[Path]:
+    def _jobs_with_status(self, statuses: set[str]) -> list[Path]:
         jobs = self.root / "jobs"
         if not jobs.exists():
             return []
         out = []
         for p in sorted(jobs.glob("*.json")):
-            if json.loads(p.read_text()).get("status") == "requested":
+            if json.loads(p.read_text()).get("status") in statuses:
                 out.append(p)
         return out
+
+    def pending_jobs(self) -> list[Path]:
+        """Jobs a worker has not picked up yet."""
+        return self._jobs_with_status({"requested"})
+
+    def open_jobs(self) -> list[Path]:
+        """Jobs that are requested or currently training: the service must not stack more on top."""
+        return self._jobs_with_status({"requested", "training"})
 
     def update_job(self, path: Path, **fields: Any) -> None:
         data = json.loads(path.read_text())

@@ -102,17 +102,19 @@
     axes(svg, W, H, pad, x, y, [0, xmax], [ymin - span * 0.1, ymax + span * 0.1], (v) => Math.round(v), (v) => v.toFixed(3));
     const kinds = { never: 'var(--muted)', periodic: 'var(--v0)', ratio: 'var(--v1)', ph: 'var(--v2)', adwin: 'var(--v3)', warm: 'var(--v5)' };
     rows.forEach((r) => {
-      const kind = r.policy.split('-')[0];
-      const shape = kind === 'periodic' ? 'circle' : 'rect';
+      const gated = r.policy.endsWith('+gate');
+      const kind = r.policy.split('+')[0].split('-')[0];
+      const color = kinds[kind] || 'var(--ink)';
+      const shape = kind === 'periodic' || kind === 'never' ? 'circle' : 'rect';
       const node = shape === 'circle'
-        ? el('circle', { cx: x(r.n_refits), cy: y(r.mae), r: 4, fill: kinds[kind] || 'var(--ink)' })
-        : el('rect', { x: x(r.n_refits) - 3.5, y: y(r.mae) - 3.5, width: 7, height: 7, fill: kinds[kind] || 'var(--ink)' });
+        ? el('circle', { cx: x(r.n_refits), cy: y(r.mae), r: 4, fill: gated ? 'var(--card)' : color, stroke: color, 'stroke-width': 1.5 })
+        : el('rect', { x: x(r.n_refits) - 3.5, y: y(r.mae) - 3.5, width: 7, height: 7, fill: gated ? 'var(--card)' : color, stroke: color, 'stroke-width': 1.5 });
       node.appendChild(el('title', {}, `${r.policy}: MAE ${r.mae.toFixed(4)}, 재학습 ${r.n_refits}회`));
       svg.appendChild(node);
     });
     fig.appendChild(svg);
     const cap = document.createElement('figcaption');
-    cap.textContent = `${dataset} — 가로: 1년 재학습 횟수, 세로: 스트림 MAE (시드 3개 평균). ● 주기 재학습, ■ 감시 기반.`;
+    cap.textContent = `${dataset} — 가로: 실제 교체 횟수, 세로: 스트림 MAE (시드 평균). ● 주기, ■ 감시 기반, 속이 빈 표시 = 승격 게이트 적용.`;
     fig.appendChild(cap);
     container.appendChild(fig);
   }
