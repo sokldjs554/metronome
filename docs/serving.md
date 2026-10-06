@@ -32,43 +32,43 @@
 
 ## 추론 최적화 (protocol P11)
 
-같은 float32 NumPy 입력, 1 intra-op 스레드, 라운드마다 엔진 순서를 교대, 워밍업 <!-- num:artifacts/optimization/benchmark_dlinear.json#warmup -->…<!-- /num -->회 뒤
-<!-- num:artifacts/optimization/benchmark_dlinear.json#repeats -->…<!-- /num -->회 측정. 모델 호출 지연이며 HTTP 가 아닙니다.
+같은 float32 NumPy 입력, 1 intra-op 스레드, 라운드마다 엔진 순서를 교대, 워밍업 <!-- num:artifacts/optimization/benchmark_dlinear.json#warmup -->50<!-- /num -->회 뒤
+<!-- num:artifacts/optimization/benchmark_dlinear.json#repeats -->300<!-- /num -->회 측정. 모델 호출 지연이며 HTTP 가 아닙니다.
 
-### DLinear (ETTh1, L=336, H=96, 7채널, 파라미터 <!-- num:artifacts/optimization/benchmark_dlinear.json#n_parameters:, -->…<!-- /num -->)
-
-| 배치 | PyTorch eager p95 (ms) | ONNX Runtime FP32 p95 (ms) | ONNX Runtime INT8 p95 (ms) |
-|---:|---:|---:|---:|
-| 1 | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/torch/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/ort_fp32/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/ort_int8/p95_ms:.3f -->…<!-- /num --> |
-| 16 | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/16/torch/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/16/ort_fp32/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/16/ort_int8/p95_ms:.3f -->…<!-- /num --> |
-| 64 | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/64/torch/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/64/ort_fp32/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/64/ort_int8/p95_ms:.3f -->…<!-- /num --> |
-
-- ONNX FP32 출력과 PyTorch 의 최대 절대 편차: <!-- num:artifacts/optimization/benchmark_dlinear.json#parity/max_abs_diff:.2e -->…<!-- /num --> (허용 1e-4).
-  INT8 편차: <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/ort_int8/max_abs_diff_vs_torch:.2e -->…<!-- /num -->.
-- 파일 크기: FP32 <!-- num:artifacts/optimization/benchmark_dlinear.json#sizes_bytes/onnx_fp32:, -->…<!-- /num --> B,
-  INT8 <!-- num:artifacts/optimization/benchmark_dlinear.json#sizes_bytes/onnx_int8:, -->…<!-- /num --> B.
-- torch <!-- num:artifacts/optimization/benchmark_dlinear.json#env/torch -->…<!-- /num -->,
-  onnxruntime <!-- num:artifacts/optimization/benchmark_dlinear.json#env/onnxruntime -->…<!-- /num -->.
-
-### PatchTST/42 (ETTh1, 파라미터 <!-- num:artifacts/optimization/benchmark_patchtst.json#n_parameters:, -->…<!-- /num -->)
+### DLinear (ETTh1, L=336, H=96, 7채널, 파라미터 <!-- num:artifacts/optimization/benchmark_dlinear.json#n_parameters:, -->64,704<!-- /num -->)
 
 | 배치 | PyTorch eager p95 (ms) | ONNX Runtime FP32 p95 (ms) | ONNX Runtime INT8 p95 (ms) |
 |---:|---:|---:|---:|
-| 1 | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/1/torch/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/1/ort_fp32/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/1/ort_int8/p95_ms:.3f -->…<!-- /num --> |
-| 16 | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/16/torch/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/16/ort_fp32/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/16/ort_int8/p95_ms:.3f -->…<!-- /num --> |
-| 64 | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/64/torch/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/64/ort_fp32/p95_ms:.3f -->…<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/64/ort_int8/p95_ms:.3f -->…<!-- /num --> |
+| 1 | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/torch/p95_ms:.3f -->0.339<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/ort_fp32/p95_ms:.3f -->0.118<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/ort_int8/p95_ms:.3f -->0.084<!-- /num --> |
+| 16 | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/16/torch/p95_ms:.3f -->1.496<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/16/ort_fp32/p95_ms:.3f -->0.718<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/16/ort_int8/p95_ms:.3f -->0.576<!-- /num --> |
+| 64 | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/64/torch/p95_ms:.3f -->3.826<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/64/ort_fp32/p95_ms:.3f -->2.135<!-- /num --> | <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/64/ort_int8/p95_ms:.3f -->1.738<!-- /num --> |
 
-INT8 편차 (배치 1): <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/1/ort_int8/max_abs_diff_vs_torch:.2e -->…<!-- /num -->.
+- ONNX FP32 출력과 PyTorch 의 최대 절대 편차: <!-- num:artifacts/optimization/benchmark_dlinear.json#parity/max_abs_diff:.2e -->4.77e-07<!-- /num --> (허용 1e-4).
+  INT8 편차: <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/ort_int8/max_abs_diff_vs_torch:.2e -->4.48e-02<!-- /num -->.
+- 파일 크기: FP32 <!-- num:artifacts/optimization/benchmark_dlinear.json#sizes_bytes/onnx_fp32:, -->262,242<!-- /num --> B,
+  INT8 <!-- num:artifacts/optimization/benchmark_dlinear.json#sizes_bytes/onnx_int8:, -->72,018<!-- /num --> B.
+- torch <!-- num:artifacts/optimization/benchmark_dlinear.json#env/torch -->2.14.1+cu130<!-- /num -->,
+  onnxruntime <!-- num:artifacts/optimization/benchmark_dlinear.json#env/onnxruntime -->1.30.0<!-- /num -->.
+
+### PatchTST/42 (ETTh1, 파라미터 <!-- num:artifacts/optimization/benchmark_patchtst.json#n_parameters:, -->81,728<!-- /num -->)
+
+| 배치 | PyTorch eager p95 (ms) | ONNX Runtime FP32 p95 (ms) | ONNX Runtime INT8 p95 (ms) |
+|---:|---:|---:|---:|
+| 1 | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/1/torch/p95_ms:.3f -->3.092<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/1/ort_fp32/p95_ms:.3f -->1.631<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/1/ort_int8/p95_ms:.3f -->1.629<!-- /num --> |
+| 16 | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/16/torch/p95_ms:.3f -->19.243<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/16/ort_fp32/p95_ms:.3f -->18.471<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/16/ort_int8/p95_ms:.3f -->19.705<!-- /num --> |
+| 64 | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/64/torch/p95_ms:.3f -->81.909<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/64/ort_fp32/p95_ms:.3f -->81.765<!-- /num --> | <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/64/ort_int8/p95_ms:.3f -->79.548<!-- /num --> |
+
+INT8 편차 (배치 1): <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/1/ort_int8/max_abs_diff_vs_torch:.2e -->1.14e-02<!-- /num -->.
 
 **채택:** 서빙 엔진은 ONNX Runtime FP32 입니다. INT8 은 수치와 편차를 보고 데이터셋별로 판단할 수 있도록 표만 남깁니다.
 서빙 이미지는 PyTorch 를 설치하지 않습니다(`Dockerfile`, CI `docker` 잡이 `import torch` 가 실패하는지 확인).
 
 ## HTTP 지연 (protocol P13)
 
-uvicorn 1 worker, loopback, keep-alive, 직렬 <!-- num:artifacts/serving/http_latency.json#n -->…<!-- /num -->회:
-p50 <!-- num:artifacts/serving/http_latency.json#http_ms/p50:.2f -->…<!-- /num --> ms,
-p95 <!-- num:artifacts/serving/http_latency.json#http_ms/p95:.2f -->…<!-- /num --> ms
-(그중 모델 호출 p50 <!-- num:artifacts/serving/http_latency.json#model_call_ms/p50:.3f -->…<!-- /num --> ms).
+uvicorn 1 worker, loopback, keep-alive, 직렬 <!-- num:artifacts/serving/http_latency.json#n -->500<!-- /num -->회:
+p50 <!-- num:artifacts/serving/http_latency.json#http_ms/p50:.2f -->4.43<!-- /num --> ms,
+p95 <!-- num:artifacts/serving/http_latency.json#http_ms/p95:.2f -->5.87<!-- /num --> ms
+(그중 모델 호출 p50 <!-- num:artifacts/serving/http_latency.json#model_call_ms/p50:.3f -->0.174<!-- /num --> ms).
 나머지는 JSON 파싱·검증·직렬화입니다. 운영 SLA 가 아니라 이 머신의 측정값입니다.
 
 ## 배포 구성
