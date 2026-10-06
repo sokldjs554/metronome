@@ -118,7 +118,8 @@ class Registry:
         path = self.versions_dir / version / "manifest.json"
         if not path.exists():
             raise RegistryError(f"unknown version {version}")
-        return json.loads(path.read_text())
+        manifest: dict[str, Any] = json.loads(path.read_text())
+        return manifest
 
     def model_path(self, version: str) -> Path:
         return self.versions_dir / version / "model.onnx"

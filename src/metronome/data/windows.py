@@ -24,10 +24,10 @@ class Scaler:
         return cls(mean.astype(np.float32), std.astype(np.float32))
 
     def transform(self, values: np.ndarray) -> np.ndarray:
-        return ((values - self.mean) / self.std).astype(np.float32)
+        return np.asarray((values - self.mean) / self.std, dtype=np.float32)
 
     def inverse(self, values: np.ndarray) -> np.ndarray:
-        return (values * self.std + self.mean).astype(np.float32)
+        return np.asarray(values * self.std + self.mean, dtype=np.float32)
 
     def to_dict(self) -> dict[str, Any]:
         return {"mean": self.mean.tolist(), "std": self.std.tolist()}

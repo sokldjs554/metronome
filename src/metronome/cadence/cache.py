@@ -181,6 +181,7 @@ def build_cache(
     """Train every stream day's model (in parallel) and write `<cache_dir>/<name>.npz` + `.json`."""
     if cfg.stream_days is None:
         cfg = replace(cfg, stream_days=PREPARED[cfg.dataset].stream_days)
+    assert cfg.stream_days is not None
     data = load_stream(cfg.dataset, processed_dir, cfg.lookback, cfg.horizon, cfg.stream_days)
     n_days = data.n_days
     todo = list(range(n_days)) if days is None else days
@@ -248,6 +249,7 @@ def build_warm_chain(
     torch.set_num_threads(cfg.train.threads)
     if cfg.stream_days is None:
         cfg = replace(cfg, stream_days=PREPARED[cfg.dataset].stream_days)
+    assert cfg.stream_days is not None
     data = load_stream(cfg.dataset, processed_dir, cfg.lookback, cfg.horizon, cfg.stream_days)
     n_days = data.n_days
     c = data.values.shape[1]

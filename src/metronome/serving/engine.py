@@ -26,4 +26,5 @@ class OnnxEngine:
         arr = np.ascontiguousarray(x, dtype=np.float32)
         if arr.ndim != 3 or arr.shape[1] != self.lookback or arr.shape[2] != self.channels:
             raise ValueError(f"expected (batch, {self.lookback}, {self.channels}), got {arr.shape}")
-        return self.session.run(None, {self.input_name: arr})[0]
+        out: np.ndarray = self.session.run(None, {self.input_name: arr})[0]
+        return out
