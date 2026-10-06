@@ -8,17 +8,28 @@ forecast at the worst possible moment.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import timedelta
 from typing import Any
 
 import numpy as np
 import polars as pl
+
+from metronome.data.freq import FrequencyError, parse_duration
 
 TIMESTAMP = "timestamp"
 
 
 class SchemaError(ValueError):
     pass
+
+
+__all__ = [
+    "TIMESTAMP",
+    "FrequencyError",
+    "SchemaError",
+    "ValidationReport",
+    "parse_duration",
+    "validate_frame",
+]
 
 
 @dataclass
@@ -40,16 +51,6 @@ class ValidationReport:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
-
-def parse_duration(freq: str) -> timedelta:
-    """Parse a polars-style duration ("1h", "10m", "15m", "1d") into a timedelta."""
-    units = {"m": "minutes", "h": "hours", "d": "days", "s": "seconds"}
-    num = "".join(ch for ch in freq if ch.isdigit())
-    unit = freq[len(num) :]
-    if not num or unit not in units:
-        raise SchemaError(f"unsupported frequency {freq!r}")
-    return timedelta(**{units[unit]: int(num)})
 
 
 def validate_frame(df: pl.DataFrame, freq: str, *, strict: bool = True) -> ValidationReport:

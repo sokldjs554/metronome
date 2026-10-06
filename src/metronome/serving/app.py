@@ -29,7 +29,7 @@ from prometheus_client import (
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 from metronome import __version__
-from metronome.data.schema import parse_duration
+from metronome.data.freq import parse_duration
 from metronome.serving.model import ActiveModel, ServingModel
 from metronome.serving.monitor import ResidualMonitor
 from metronome.serving.registry import Registry, RegistryError, VerificationError

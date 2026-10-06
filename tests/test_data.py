@@ -62,7 +62,7 @@ def test_validate_flags_constant_channel(frame: pl.DataFrame) -> None:
 def test_parse_duration() -> None:
     assert parse_duration("10m").total_seconds() == 600
     assert parse_duration("1h").total_seconds() == 3600
-    with pytest.raises(SchemaError):
+    with pytest.raises(ValueError):
         parse_duration("1x")
 
 
