@@ -1,0 +1,414 @@
+<title>Metronome Replay</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column of instrument panels; the replay is the hero, the offline evidence follows. */
+:root {
+  --bg: #f5f6f3; --panel: #ffffff; --ink: #1c221f; --muted: #67716b; --line: #dfe4df;
+  --accent: #1f6f5f; --accent-soft: #e3f0ec; --warn: #b3261e; --ok: #2e7d32;
+  --v1: #1f6f5f; --v2: #c8742b; --v3: #4b5ea6; --v4: #8e4d9e; --v5: #b3261e; --v6: #5c7a29;
+  --sans: "IBM Plex Sans KR", "Noto Sans KR", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121614; --panel: #1b201d; --ink: #e8ece9; --muted: #9aa49e; --line: #2b322e;
+    --accent: #6fc3ae; --accent-soft: #1e2f2a; --warn: #ef7b73; --ok: #7bd389;
+    --v1: #6fc3ae; --v2: #e5a06a; --v3: #9eaee8; --v4: #c79ad2; --v5: #ef7b73; --v6: #a6c86a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121614; --panel: #1b201d; --ink: #e8ece9; --muted: #9aa49e; --line: #2b322e;
+  --accent: #6fc3ae; --accent-soft: #1e2f2a; --warn: #ef7b73; --ok: #7bd389;
+  --v1: #6fc3ae; --v2: #e5a06a; --v3: #9eaee8; --v4: #c79ad2; --v5: #ef7b73; --v6: #a6c86a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--sans); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 24px 48px; padding-inline: 16px; }
+h1 { font-size: 30px; margin: 0; letter-spacing: -0.3px; text-wrap: balance; }
+h2 { font-size: 15px; margin: 0 0 10px; color: var(--accent); text-transform: uppercase; letter-spacing: .6px; }
+h3 { font-size: 14px; margin: 16px 0 6px; color: var(--muted); }
+p { margin: 0 0 10px; max-width: 70ch; }
+.lede { font-size: 17px; color: var(--ink); max-width: 64ch; }
+.muted { color: var(--muted); }
+.hero { display: grid; gap: 16px; margin-bottom: 20px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 13px/1 var(--mono); padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); }
+.chip.ok { border-color: var(--ok); color: var(--ok); }
+.chip.warn { border-color: var(--warn); color: var(--warn); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.grid > .panel { min-width: 0; }
+.span2 { grid-column: 1 / -1; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; }
+button { font: 14px var(--sans); background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+button.secondary { background: var(--panel); color: var(--accent); border: 1px solid var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+select { font: 14px var(--sans); padding: 7px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.progress { height: 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.progress > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 10px 0; }
+.stat { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.stat .k { display: block; font-size: 12px; color: var(--muted); }
+.stat .v { font: 20px/1.3 var(--mono); font-variant-numeric: tabular-nums; }
+.stat.alert .v { color: var(--warn); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+th { color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-family: var(--mono); }
+.state-ok { color: var(--ok); } .state-alarm { color: var(--warn); font-weight: 600; }
+svg { width: 100%; height: auto; display: block; }
+.tick { fill: var(--muted); font: 10px var(--mono); }
+.axis { stroke: var(--line); }
+figure { margin: 10px 0 0; }
+figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.log { margin: 0; padding-left: 18px; font-size: 13px; max-height: 220px; overflow: auto; }
+.log li { margin: 3px 0; }
+.pareto { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.pareto figure { margin: 0; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 13px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; font-family: var(--mono); word-break: break-all; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.foot { margin-top: 24px; font-size: 13px; color: var(--muted); }
+a { color: var(--accent); }
+@media (max-width: 640px) { h1 { font-size: 24px; } .stat .v { font-size: 17px; } }
+@media (prefers-reduced-motion: reduce) { .progress > div { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div>
+      <h1>Metronome Replay</h1>
+      <p class="lede">배포된 시계열 예측 모델을 <strong>언제 다시 학습할지</strong> 데이터로 정하는 non-stop 파이프라인. 이 페이지는 ETTh1 의 마지막 1년을 시간순으로 재생하면서, 서버와 같은 DLinear 가중치로 브라우저 안에서 직접 예측하고, 같은 검출기 코드로 오차를 감시하고, 서버 리플레이에서 실제로 재학습된 모델로 무중단 교체합니다.</p>
+      <p class="muted">공개 벤치마크(ETT) 데이터이며 실제 설비·고객 데이터가 아닙니다. 재학습 자체는 브라우저에서 할 수 없으므로, 서버 리플레이(API + worker)가 기록한 버전을 같은 시점에 불러옵니다. 저장소: <a href="https://github.com/sokldjs554/metronome" target="_blank" rel="noopener">sokldjs554/metronome</a></p>
+    </div>
+    <div class="chips" id="chips">
+      <span class="chip" id="chip-model">모델 —</span>
+      <span class="chip" id="chip-time">스트림 —</span>
+      <span class="chip" id="chip-match">서버 기록 대조 —</span>
+    </div>
+  </header>
+
+  <section class="grid">
+    <div class="panel span2">
+      <h2>스트림 재생</h2>
+      <div class="controls">
+        <button id="btn-play">자동 재생</button>
+        <button id="btn-day" class="secondary">+1일</button>
+        <button id="btn-week" class="secondary">+7일</button>
+        <button id="btn-month" class="secondary">+30일</button>
+        <label class="muted" for="speed">속도 <select id="speed"><option value="24">1일/프레임</option><option value="72" selected>3일/프레임</option><option value="168">7일/프레임</option></select></label>
+        <button id="btn-reset" class="secondary">처음부터</button>
+      </div>
+      <div class="progress"><div id="bar"></div></div>
+      <div class="stats">
+        <div class="stat"><span class="k">현재 시각</span><span class="v" id="s-time">—</span></div>
+        <div class="stat"><span class="k">활성 모델</span><span class="v" id="s-model">—</span></div>
+        <div class="stat" id="s-rolling-wrap"><span class="k">최근 7일 MAE</span><span class="v" id="s-rolling">—</span></div>
+        <div class="stat"><span class="k">배포 시 검증 MAE</span><span class="v" id="s-baseline">—</span></div>
+        <div class="stat"><span class="k">해결된 예측</span><span class="v" id="s-resolved">0</span></div>
+        <div class="stat"><span class="k">교체 횟수</span><span class="v" id="s-swaps">0</span></div>
+      </div>
+      <figure>
+        <svg id="chart-daily" viewBox="0 0 960 260" role="img" aria-label="일별 MAE 추이"></svg>
+        <figcaption>일별 MAE (초기 학습 구간 표준편차 단위). 색 = 그날 예측한 모델 버전, ▲ = 검출기 경보, ● = 교체. 회색 점선 = 서버 리플레이가 기록한 같은 날의 MAE.</figcaption>
+      </figure>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="panel">
+      <h2>마지막 예측</h2>
+      <figure>
+        <svg id="chart-forecast" viewBox="0 0 440 220" role="img" aria-label="OT 채널 최근 예측과 실제"></svg>
+        <figcaption>OT(오일 온도) 채널. 실선 = 실제, 점선 = 현재 시각에 낸 96시간 예측. 지평이 다 채워진 예측만 감시 통계에 들어갑니다.</figcaption>
+      </figure>
+    </div>
+
+    <div class="panel">
+      <h2>오차 감시</h2>
+      <table><thead><tr><th>검출기</th><th class="num">통계량</th><th class="num">임계값</th><th>상태</th><th>경보일 (브라우저 / 서버)</th></tr></thead><tbody id="detectors"></tbody></table>
+      <h3>이벤트</h3>
+      <ol class="log" id="log"><li class="muted">재생을 시작하면 경보·재학습·교체가 여기에 쌓입니다.</li></ol>
+    </div>
+
+    <div class="panel">
+      <h2>지금 서비스 중인 모델</h2>
+      <dl class="kv" id="model-kv"></dl>
+    </div>
+
+    <div class="panel">
+      <h2>이 교체가 어떻게 일어나나</h2>
+      <p class="muted">검출기 경보 → API 가 재학습 job 을 기록 → worker 가 그 시점까지의 데이터로 콜드 학습 → ONNX 내보내기와 parity 검사 → 등록 → API 가 해시와 참조 입출력을 다시 검증한 뒤 포인터만 교체. 요청은 하나도 실패하지 않습니다(테스트로 고정). 이 페이지는 그 기록을 같은 시점에 재현합니다.</p>
+      <p class="muted">교체 뒤 최대 4일은 이전 버전이 만든 예측이 해결되므로 그 날들은 판정에서 제외합니다(회색 구간). 검출기는 새 모델이 단독으로 예측한 날부터 다시 셉니다.</p>
+    </div>
+  </section>
+
+  <section class="panel" style="margin-top:16px">
+    <h2>오프라인 실험: 언제 재학습해야 하는가</h2>
+    <p class="muted" id="evidence-note"></p>
+    <div class="pareto" id="pareto"></div>
+    <table style="margin-top:12px"><thead><tr><th>데이터셋</th><th class="num">never</th><th class="num">periodic-7</th><th class="num">periodic-1</th><th>대표 감시 정책</th><th class="num">교체 횟수</th></tr></thead><tbody id="evidence-rows"></tbody></table>
+    <p class="muted" style="margin-top:10px" id="hyp"></p>
+  </section>
+
+  <p class="foot">코드·프로토콜·결과: <a href="https://github.com/sokldjs554/metronome" target="_blank" rel="noopener">github.com/sokldjs554/metronome</a> · 이 페이지의 숫자는 저장소의 <code>artifacts/</code> JSON 에서 그대로 가져왔습니다.</p>
+</div>
+
+<script>
+window.DEMO = /*__DEMO_JSON__*/null;
+</script>
+<script>
+(function () {
+  'use strict';
+  const D = window.DEMO;
+  if (!D) { document.getElementById('log').innerHTML = '<li>데모 데이터가 비어 있습니다.</li>'; return; }
+  const $ = (id) => document.getElementById(id);
+  const fmt = (x, d = 3) => (x === null || x === undefined || Number.isNaN(x)) ? '—' : Number(x).toFixed(d);
+  const SVG = 'http://www.w3.org/2000/svg';
+  const el = (t, a, txt) => { const e = document.createElementNS(SVG, t); for (const k in a) e.setAttribute(k, a[k]); if (txt !== undefined) e.textContent = txt; return e; };
+  const clear = (s) => { while (s.firstChild) s.removeChild(s.firstChild); };
+  const scale = ([d0, d1], [r0, r1]) => { const k = d1 === d0 ? 0 : (r1 - r0) / (d1 - d0); return (x) => r0 + (x - d0) * k; };
+  const versionColor = (v) => `var(--v${((parseInt(String(v).replace(/\D/g, ''), 10) || 1) - 1) % 6 + 1})`;
+
+  // ---- data ----------------------------------------------------------------------------------
+  const L = D.lookback, H = D.horizon, C = D.channels.length;
+  const values = D.values;                 // rows from (start_row - L) .. end, each [C]
+  const rowOffset = D.first_row;           // absolute row index of values[0]
+  const startRow = D.start_row;            // first stream row (absolute)
+  const nRows = D.n_rows;
+  const t0 = Date.parse(D.first_time);     // timestamp of values[0]
+  const stepMs = D.step_hours * 3600e3;
+  const tsOf = (absRow) => new Date(t0 + (absRow - rowOffset) * stepMs);
+  const dayOf = (absRow) => tsOf(absRow).toISOString().slice(0, 10);
+  const fixedStd = D.fixed_scaler.std;
+  const otIdx = D.channels.indexOf('OT') >= 0 ? D.channels.indexOf('OT') : C - 1;
+
+  function decode(b64) { const bin = atob(b64); const buf = new ArrayBuffer(bin.length); const u8 = new Uint8Array(buf); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Float32Array(buf); }
+  const versions = D.versions.map((v) => ({
+    ...v, sw: decode(v.weights.seasonal_w), sb: decode(v.weights.seasonal_b), tw: decode(v.weights.trend_w), tb: decode(v.weights.trend_b),
+  }));
+  const byVersion = Object.fromEntries(versions.map((v) => [v.version, v]));
+  // server-recorded swap schedule: version -> absolute row where it started serving
+  const schedule = D.swap_schedule; // [{version, from_row, trigger, alarm_day}]
+
+  // ---- DLinear forward (shared linear layers across channels, moving-average kernel 25) ----------
+  const K = 25, PAD = (K - 1) / 2;
+  function forecast(model, histAbsEnd) {
+    const out = new Array(H);
+    for (let h = 0; h < H; h++) out[h] = new Array(C);
+    const z = new Float64Array(L);
+    const trend = new Float64Array(L), seas = new Float64Array(L);
+    for (let c = 0; c < C; c++) {
+      const mean = model.scaler.mean[c], std = model.scaler.std[c];
+      for (let i = 0; i < L; i++) z[i] = (values[histAbsEnd - L + i - rowOffset][c] - mean) / std;
+      for (let i = 0; i < L; i++) { let s = 0; for (let j = i - PAD; j <= i + PAD; j++) s += z[Math.min(L - 1, Math.max(0, j))]; trend[i] = s / K; seas[i] = z[i] - trend[i]; }
+      for (let h = 0; h < H; h++) {
+        let acc = model.sb[h] + model.tb[h]; const o = h * L;
+        for (let i = 0; i < L; i++) acc += model.sw[o + i] * seas[i] + model.tw[o + i] * trend[i];
+        out[h][c] = acc * std + mean;
+      }
+    }
+    return out;
+  }
+
+  // ---- detectors (same rules as metronome.drift) --------------------------------------------
+  class RatioRule { constructor(tau, baseline) { this.name = `ratio-${tau}`; this.tau = tau; this.window = 7; this.cooldown = 7; this.reset(baseline); }
+    update(x) { this.buf.push(x); if (this.buf.length > this.window) this.buf.shift(); this.since++; if (this.baseline == null || this.buf.length < this.window || this.since < this.cooldown) return false; return this.rolling() > this.baseline * (1 + this.tau); }
+    rolling() { return this.buf.length ? this.buf.reduce((a, b) => a + b, 0) / this.buf.length : null; }
+    reset(baseline) { if (baseline != null) this.baseline = baseline; this.buf = []; this.since = 0; }
+    state() { return { stat: this.rolling(), thr: this.baseline == null ? null : this.baseline * (1 + this.tau) }; } }
+  class PageHinkley { constructor(lambda) { this.name = `ph-${lambda}`; this.lambda = lambda; this.delta = 0.005; this.min = 7; this.reset(); }
+    update(x) { this.n++; this.mean += (x - this.mean) / this.n; this.m += x - this.mean - this.delta; this.mMin = Math.min(this.mMin, this.m); if (this.n < this.min) return false; return (this.m - this.mMin) > this.lambda; }
+    reset() { this.n = 0; this.mean = 0; this.m = 0; this.mMin = 0; }
+    state() { return { stat: this.m - this.mMin, thr: this.lambda }; } }
+  class ADWIN { constructor(delta) { this.name = `adwin-${delta}`; this.delta = delta; this.maxB = 5; this.minW = 7; this.reset(); }
+    reset() { this.rows = [[]]; this.width = 0; this.total = 0; this.variance = 0; }
+    insert(x) { this.rows[0].push({ t: x, v: 0 }); if (this.width > 0) { const mean = this.total / this.width; this.variance += this.width * (x - mean) ** 2 / (this.width + 1); } this.width++; this.total += x; this.compress(); }
+    compress() { for (let i = 0; i < this.rows.length; i++) { const row = this.rows[i]; if (row.length <= this.maxB) break; if (i + 1 === this.rows.length) this.rows.push([]); const a = row.shift(), b = row.shift(); const n = 2 ** i; const ma = a.t / n, mb = b.t / n; this.rows[i + 1].push({ t: a.t + b.t, v: a.v + b.v + n * n * (ma - mb) ** 2 / (2 * n) }); } }
+    dropOldest() { for (let i = this.rows.length - 1; i >= 0; i--) { if (this.rows[i].length) { const b = this.rows[i].shift(); const n = 2 ** i; const mb = b.t / n; this.width -= n; this.total -= b.t; if (this.width > 0) { const mean = this.total / this.width; this.variance = Math.max(0, this.variance - (b.v + n * this.width * (mb - mean) ** 2 / (n + this.width))); } else this.variance = 0; return; } } }
+    update(x) { this.insert(x); if (this.width < this.minW) return false; let changed = false, reduce = true;
+      while (reduce) { reduce = false; let n0 = 0, s0 = 0;
+        outer: for (let i = this.rows.length - 1; i >= 0; i--) { const nb = 2 ** i; for (const b of [...this.rows[i]]) { n0 += nb; s0 += b.t; const n1 = this.width - n0; if (n1 <= 0) break; const s1 = this.total - s0; const m0 = s0 / n0, m1 = s1 / n1; const v = this.width ? this.variance / this.width : 0; const m = 1 / (1 / n0 + 1 / n1); const dp = this.delta / Math.max(Math.log(this.width), 1); const eps = Math.sqrt(2 / m * v * Math.log(2 / dp)) + 2 / (3 * m) * Math.log(2 / dp); if (Math.abs(m0 - m1) > eps && this.width > this.minW) { this.dropOldest(); changed = true; reduce = true; break outer; } } } }
+      return changed; }
+    state() { return { stat: this.width ? this.total / this.width : null, thr: null }; } }
+
+  // ---- replay state ---------------------------------------------------------------------------
+  let st;
+  function reset() {
+    const v0 = versions[0];
+    st = { cursor: startRow, active: v0, pending: [], dayAbs: new Map(), dayN: new Map(), dayVers: new Map(), days: [], resolved: 0, swaps: 0,
+      detectors: [new RatioRule(0.2, v0.metrics.val_mae_fixed), new PageHinkley(0.1), new ADWIN(0.01)],
+      alarms: [], log: [], scheduleIdx: 1, lastForecast: null, lastOrigin: null, judged: v0.version, browserAlarmDays: {}, mismatch: 0 };
+    render();
+  }
+  function closeDay(day) {
+    const n = st.dayN.get(day) || 0; if (!n) return;
+    const mae = st.dayAbs.get(day) / n; const vers = [...st.dayVers.get(day)].sort();
+    const judged = vers.length === 1 && vers[0] === st.judged;
+    st.days.push({ day, mae, vers, judged });
+    if (!judged) return;
+    const fired = st.detectors.filter((d) => d.update(mae)).map((d) => d.name);
+    if (fired.length) {
+      st.alarms.push({ day, mae, detectors: fired });
+      for (const name of fired) if (!st.browserAlarmDays[name]) st.browserAlarmDays[name] = day;
+      st.log.push(`${day} 경보 ${fired.join(', ')} (일별 MAE ${mae.toFixed(3)})`);
+      const srv = D.alarms.find((a) => a.day === day);
+      if (!srv) st.mismatch++;
+    }
+  }
+  function stepHour() {
+    if (st.cursor >= nRows) return false;
+    // swap to the recorded next version when the server did
+    while (st.scheduleIdx < schedule.length && st.cursor >= schedule[st.scheduleIdx].from_row) {
+      const s = schedule[st.scheduleIdx++]; const nv = byVersion[s.version];
+      st.log.push(`${dayOf(st.cursor)} 교체 ${st.active.version} → ${nv.version} (${s.trigger === 'detector' ? '검출기 ' + (s.alarm_day || '') : s.trigger}, 학습 데이터 …${s.cutoff_time.slice(0, 10)})`);
+      st.active = nv; st.swaps++; st.judged = nv.version;
+      for (const d of st.detectors) d.reset(nv.metrics.val_mae_fixed);
+    }
+    const origin = st.cursor - 1;
+    const fc = forecast(st.active, st.cursor);
+    st.pending.push({ origin, version: st.active.version, fc, obs: 0 });
+    st.lastForecast = fc; st.lastOrigin = origin;
+    // observe row `cursor`
+    const row = values[st.cursor - rowOffset];
+    const still = [];
+    for (const p of st.pending) {
+      const step = st.cursor - p.origin;
+      if (step >= 1 && step <= H) {
+        let abs = 0; for (let c = 0; c < C; c++) abs += Math.abs(p.fc[step - 1][c] - row[c]) / fixedStd[c];
+        p.err = (p.err || 0) + abs; p.obs++;
+      }
+      if (p.obs >= H) {
+        const mae = p.err / (H * C); const day = dayOf(p.origin);
+        const prev = st.pending.length && st.currentDay;
+        if (st.currentDay && day !== st.currentDay) closeDay(st.currentDay);
+        st.currentDay = day;
+        st.dayAbs.set(day, (st.dayAbs.get(day) || 0) + mae); st.dayN.set(day, (st.dayN.get(day) || 0) + 1);
+        if (!st.dayVers.has(day)) st.dayVers.set(day, new Set()); st.dayVers.get(day).add(p.version);
+        st.resolved++;
+      } else still.push(p);
+    }
+    st.pending = still;
+    st.cursor++;
+    return true;
+  }
+  function stepHours(n) { for (let i = 0; i < n; i++) if (!stepHour()) break; render(); }
+
+  // ---- rendering ------------------------------------------------------------------------------
+  function render() {
+    const prog = (st.cursor - startRow) / (nRows - startRow);
+    $('bar').style.width = `${(prog * 100).toFixed(1)}%`;
+    const now = tsOf(st.cursor - 1).toISOString().slice(0, 13).replace('T', ' ');
+    $('s-time').textContent = now; $('chip-time').textContent = `스트림 ${now}`;
+    $('s-model').textContent = st.active.version; $('chip-model').textContent = `모델 ${st.active.version}`; $('chip-model').style.color = versionColor(st.active.version);
+    const judgedDays = st.days.filter((d) => d.judged).slice(-7);
+    const rolling = judgedDays.length ? judgedDays.reduce((a, d) => a + d.mae, 0) / judgedDays.length : null;
+    $('s-rolling').textContent = fmt(rolling); $('s-rolling-wrap').classList.toggle('alert', rolling != null && rolling > st.active.metrics.val_mae_fixed * 1.2);
+    $('s-baseline').textContent = fmt(st.active.metrics.val_mae_fixed);
+    $('s-resolved').textContent = st.resolved.toLocaleString(); $('s-swaps').textContent = st.swaps;
+    const match = st.alarms.length ? (st.mismatch === 0 ? `서버 기록과 일치 (${st.alarms.length}건)` : `서버 기록과 ${st.mismatch}건 불일치`) : '서버 기록 대조 대기';
+    $('chip-match').textContent = match; $('chip-match').className = 'chip ' + (st.alarms.length ? (st.mismatch ? 'warn' : 'ok') : '');
+    // detectors
+    const tb = $('detectors'); tb.innerHTML = '';
+    for (const d of st.detectors) {
+      const s = d.state(); const alarmed = s.stat != null && s.thr != null && s.stat > s.thr;
+      const srv = D.alarms.find((a) => a.detectors.includes(d.name));
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${d.name}</td><td class="num">${fmt(s.stat)}</td><td class="num">${s.thr == null ? (d.delta != null ? 'δ=' + d.delta : '—') : fmt(s.thr)}</td><td class="${alarmed ? 'state-alarm' : 'state-ok'}">${alarmed ? '임계 초과' : '정상'}</td><td>${st.browserAlarmDays[d.name] || '—'} / ${srv ? srv.day : '—'}</td>`;
+      tb.appendChild(tr);
+    }
+    const log = $('log'); log.innerHTML = '';
+    if (!st.log.length) log.innerHTML = '<li class="muted">재생을 시작하면 경보·재학습·교체가 여기에 쌓입니다.</li>';
+    for (const line of st.log.slice(-12).reverse()) { const li = document.createElement('li'); li.textContent = line; log.appendChild(li); }
+    const kv = $('model-kv'); kv.innerHTML = '';
+    const a = st.active;
+    [['버전', a.version], ['학습 데이터', `… ${a.provenance.cutoff_time.slice(0, 16)} (${a.provenance.trigger})`], ['검증 MAE (고정 척도)', fmt(a.metrics.val_mae_fixed, 4)], ['학습 epoch / 초', `${a.metrics.epochs} / ${fmt(a.metrics.train_seconds, 1)}`], ['ONNX parity 편차', a.metrics.export_parity_max_abs_diff.toExponential(2)], ['ONNX SHA-256', a.onnx_sha256.slice(0, 20) + '…'], ['등록된 버전', `${versions.length}개 (서버 리플레이)`]]
+      .forEach(([k, v]) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; kv.append(dt, dd); });
+    drawDaily(); drawForecast();
+    const stop = st.cursor >= nRows; $('btn-day').disabled = stop; $('btn-week').disabled = stop; $('btn-month').disabled = stop; if (stop && timer) { clearInterval(timer); timer = null; $('btn-play').textContent = '자동 재생'; }
+  }
+  function drawDaily() {
+    const svg = $('chart-daily'); clear(svg);
+    const W = 960, Hh = 260, pad = { l: 46, r: 12, t: 12, b: 28 };
+    const days = st.days;
+    if (days.length < 2) { svg.appendChild(el('text', { x: W / 2, y: Hh / 2, class: 'tick', 'text-anchor': 'middle' }, '하루치 오차가 모이면 그래프가 그려집니다. 재생을 시작하세요.')); return; }
+    const srv = D.daily_server; // [{day, mae}]
+    const totalDays = D.n_days;
+    const ys = days.map((d) => d.mae).concat(srv.slice(0, days.length).map((d) => d.mae));
+    const ymax = Math.max(...ys) * 1.08;
+    const x = scale([0, totalDays - 1], [pad.l, W - pad.r]); const y = scale([0, ymax], [Hh - pad.b, pad.t]);
+    svg.appendChild(el('line', { x1: pad.l, x2: W - pad.r, y1: Hh - pad.b, y2: Hh - pad.b, class: 'axis' }));
+    svg.appendChild(el('line', { x1: pad.l, x2: pad.l, y1: pad.t, y2: Hh - pad.b, class: 'axis' }));
+    for (let i = 0; i <= 4; i++) { const v = ymax * i / 4; svg.appendChild(el('line', { x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v), class: 'axis', 'stroke-dasharray': '2 4' })); svg.appendChild(el('text', { x: pad.l - 6, y: y(v) + 3, class: 'tick', 'text-anchor': 'end' }, v.toFixed(2))); }
+    for (let i = 0; i < totalDays; i += 60) svg.appendChild(el('text', { x: x(i), y: Hh - pad.b + 14, class: 'tick', 'text-anchor': 'middle' }, D.day_labels[i]));
+    const dayIndex = (day) => D.day_labels_full.indexOf(day);
+    // server reference
+    const sp = srv.filter((d) => dayIndex(d.day) >= 0 && dayIndex(d.day) < days.length + 1).map((d) => `${x(dayIndex(d.day))},${y(d.mae)}`).join(' ');
+    svg.appendChild(el('polyline', { points: sp, fill: 'none', stroke: 'var(--muted)', 'stroke-width': 1, 'stroke-dasharray': '3 3', opacity: .7 }));
+    // browser line segments by version; unjudged days drawn faint
+    let seg = [], segV = null;
+    const flush = () => { if (seg.length > 1) svg.appendChild(el('polyline', { points: seg.map(([i, v]) => `${x(i)},${y(v)}`).join(' '), fill: 'none', stroke: versionColor(segV), 'stroke-width': 2 })); };
+    days.forEach((d) => { const i = dayIndex(d.day); const v = d.vers[d.vers.length - 1]; if (v !== segV) { flush(); seg = seg.length ? [seg[seg.length - 1]] : []; segV = v; } seg.push([i, d.mae]); if (!d.judged) svg.appendChild(el('rect', { x: x(i) - 1.5, y: pad.t, width: 3, height: Hh - pad.b - pad.t, fill: 'var(--line)', opacity: .6 })); });
+    flush();
+    for (const a of st.alarms) { const i = dayIndex(a.day); svg.appendChild(el('path', { d: `M${x(i)},${y(a.mae) - 11} l5,8 h-10 z`, fill: 'var(--warn)' })); }
+    for (const s of schedule.slice(1, st.scheduleIdx)) { const i = dayIndex(dayOf(s.from_row)); if (i >= 0) svg.appendChild(el('circle', { cx: x(i), cy: Hh - pad.b, r: 4.5, fill: versionColor(s.version), stroke: 'var(--panel)', 'stroke-width': 1.5 })); }
+    const base = st.active.metrics.val_mae_fixed; svg.appendChild(el('line', { x1: pad.l, x2: W - pad.r, y1: y(base), y2: y(base), stroke: 'var(--muted)', 'stroke-dasharray': '6 4', opacity: .6 }));
+    const lg = $('legend'); lg.innerHTML = '';
+    for (const v of versions.slice(0, Math.max(1, st.scheduleIdx))) { const s = document.createElement('span'); s.innerHTML = `<i style="background:${versionColor(v.version)}"></i>${v.version}`; lg.appendChild(s); }
+  }
+  function drawForecast() {
+    const svg = $('chart-forecast'); clear(svg);
+    if (!st.lastForecast) return;
+    const W = 440, Hh = 220, pad = { l: 44, r: 10, t: 12, b: 26 };
+    const o = st.lastOrigin; const back = 72;
+    const actual = []; for (let r = o - back; r <= Math.min(nRows - 1, o + H); r++) actual.push([r - o, values[r - rowOffset][otIdx]]);
+    const fc = st.lastForecast.map((row, h) => [h + 1, row[otIdx]]);
+    const ys = actual.map((p) => p[1]).concat(fc.map((p) => p[1])); const ymin = Math.min(...ys), ymax = Math.max(...ys); const span = Math.max(ymax - ymin, 1e-6);
+    const x = scale([-back, H], [pad.l, W - pad.r]); const y = scale([ymin - span * .1, ymax + span * .1], [Hh - pad.b, pad.t]);
+    svg.appendChild(el('line', { x1: pad.l, x2: W - pad.r, y1: Hh - pad.b, y2: Hh - pad.b, class: 'axis' }));
+    svg.appendChild(el('line', { x1: x(0), x2: x(0), y1: pad.t, y2: Hh - pad.b, stroke: 'var(--muted)', 'stroke-dasharray': '3 3' }));
+    for (let i = 0; i <= 3; i++) { const v = ymin - span * .1 + (span * 1.2) * i / 3; svg.appendChild(el('text', { x: pad.l - 6, y: y(v) + 3, class: 'tick', 'text-anchor': 'end' }, v.toFixed(1))); }
+    [[-72, '-72h'], [0, '지금'], [48, '+48h'], [96, '+96h']].forEach(([v, t]) => svg.appendChild(el('text', { x: x(v), y: Hh - pad.b + 14, class: 'tick', 'text-anchor': 'middle' }, t)));
+    svg.appendChild(el('polyline', { points: actual.map(([a, b]) => `${x(a)},${y(b)}`).join(' '), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.6 }));
+    svg.appendChild(el('polyline', { points: fc.map(([a, b]) => `${x(a)},${y(b)}`).join(' '), fill: 'none', stroke: versionColor(st.active.version), 'stroke-width': 2, 'stroke-dasharray': '5 3' }));
+  }
+
+  // ---- offline evidence -----------------------------------------------------------------------
+  function drawEvidence() {
+    const ev = D.evidence; if (!ev) return;
+    $('evidence-note').textContent = ev.note || '';
+    const grid = $('pareto'); grid.innerHTML = '';
+    const kinds = { never: 'var(--muted)', periodic: 'var(--v1)', ratio: 'var(--v2)', ph: 'var(--v3)', adwin: 'var(--v4)' };
+    for (const [ds, d] of Object.entries(ev.datasets)) {
+      const fig = document.createElement('figure'); const svg = el('svg', { viewBox: '0 0 320 220', role: 'img', 'aria-label': `${ds} 재학습 횟수 대 MAE` });
+      const W = 320, Hh = 220, pad = { l: 46, r: 10, t: 12, b: 28 }; const rows = d.policies;
+      const xs = rows.map((r) => r.n_refits), ys = rows.map((r) => r.mae); const xmax = Math.max(...xs, 1), ymin = Math.min(...ys), ymax = Math.max(...ys); const span = Math.max(ymax - ymin, 1e-6);
+      const x = scale([0, xmax], [pad.l, W - pad.r]), y = scale([ymin - span * .1, ymax + span * .1], [Hh - pad.b, pad.t]);
+      svg.appendChild(el('line', { x1: pad.l, x2: W - pad.r, y1: Hh - pad.b, y2: Hh - pad.b, class: 'axis' })); svg.appendChild(el('line', { x1: pad.l, x2: pad.l, y1: pad.t, y2: Hh - pad.b, class: 'axis' }));
+      for (let i = 0; i <= 4; i++) { const v = ymin - span * .1 + span * 1.2 * i / 4; svg.appendChild(el('text', { x: pad.l - 5, y: y(v) + 3, class: 'tick', 'text-anchor': 'end' }, v.toFixed(3))); const xv = xmax * i / 4; svg.appendChild(el('text', { x: x(xv), y: Hh - pad.b + 14, class: 'tick', 'text-anchor': 'middle' }, Math.round(xv))); }
+      rows.forEach((r) => { const gated = r.policy.endsWith('+gate'); const kind = r.policy.split('+')[0].split('-')[0]; const color = kinds[kind] || 'var(--ink)'; const circle = kind === 'periodic' || kind === 'never';
+        const node = circle ? el('circle', { cx: x(r.n_refits), cy: y(r.mae), r: 4, fill: gated ? 'var(--panel)' : color, stroke: color, 'stroke-width': 1.5 }) : el('rect', { x: x(r.n_refits) - 3.5, y: y(r.mae) - 3.5, width: 7, height: 7, fill: gated ? 'var(--panel)' : color, stroke: color, 'stroke-width': 1.5 });
+        node.appendChild(el('title', {}, `${r.policy}: MAE ${r.mae.toFixed(4)}, 교체 ${r.n_refits.toFixed(0)}회`)); svg.appendChild(node); });
+      fig.appendChild(svg); const cap = document.createElement('figcaption'); cap.textContent = `${ds} — 가로: 실제 교체 횟수(1년), 세로: 스트림 MAE(시드 평균). ● 주기, ■ 감시 기반, 속이 빈 표시 = 승격 게이트.`; fig.appendChild(cap); grid.appendChild(fig);
+      const by = Object.fromEntries(rows.map((p) => [p.policy, p])); const rep = d.representative || {};
+      const tr = document.createElement('tr'); tr.innerHTML = `<td>${ds}</td><td class="num">${fmt(by.never && by.never.mae, 4)}</td><td class="num">${fmt(by['periodic-7'] && by['periodic-7'].mae, 4)}</td><td class="num">${fmt(by['periodic-1'] && by['periodic-1'].mae, 4)}</td><td>${rep.policy ? rep.policy + ' (' + fmt(rep.mae, 4) + ')' : '—'}</td><td class="num">${rep.n_refits != null ? rep.n_refits.toFixed(0) : '—'}</td>`;
+      $('evidence-rows').appendChild(tr);
+    }
+    $('hyp').textContent = D.hypotheses_text || '';
+  }
+
+  // ---- controls --------------------------------------------------------------------------------
+  let timer = null;
+  $('btn-day').addEventListener('click', () => stepHours(24));
+  $('btn-week').addEventListener('click', () => stepHours(24 * 7));
+  $('btn-month').addEventListener('click', () => stepHours(24 * 30));
+  $('btn-reset').addEventListener('click', () => { if (timer) { clearInterval(timer); timer = null; $('btn-play').textContent = '자동 재생'; } reset(); });
+  $('btn-play').addEventListener('click', () => { if (timer) { clearInterval(timer); timer = null; $('btn-play').textContent = '자동 재생'; return; } $('btn-play').textContent = '일시정지'; timer = setInterval(() => stepHours(parseInt($('speed').value, 10)), 120); });
+  reset(); drawEvidence();
+  // start with the first two weeks already played so the page is not empty at rest
+  stepHours(24 * 14);
+})();
+</script>
