@@ -111,6 +111,9 @@ def test_replay_triggers_retrain_and_worker_hot_swaps(client: TestClient, deploy
     assert total_requests >= 1, "schedule should request a retrain within 60 days"
     reg = Registry(root)
     assert reg.pending_jobs()
+    # with a job pending the stream refuses to advance until the worker delivers (protocol P7 lag)
+    blocked = client.post("/v1/replay/step", json={"steps": 24}).json()
+    assert blocked["blocked_on_retrain"] and blocked["stepped"] == 0
     cfg = WorkerConfig(registry_root=root, stream_path=root / "stream.npz", max_epochs=1, threads=1)
     done = run_worker(cfg, once=True)
     assert done and done[0]["version"] == "v0002"
@@ -119,6 +122,9 @@ def test_replay_triggers_retrain_and_worker_hot_swaps(client: TestClient, deploy
     reload = client.post("/v1/models/reload", headers={"X-API-Key": "secret"}).json()
     assert reload["changed"] and reload["to"] == "v0002"
     assert client.get("/ready").json()["model"] == "v0002"
+    moved = client.post("/v1/replay/step", json={"steps": 24}).json()
+    assert moved["stepped"] == 24 and not moved["blocked_on_retrain"]
+    assert client.get("/v1/monitor").json()["judged_version"] == "v0002"
     events = client.get("/v1/events").json()
     assert events["swaps"][-1]["to"] == "v0002" and events["retrain_requests"]
     prov = reg.manifest("v0002")["provenance"]

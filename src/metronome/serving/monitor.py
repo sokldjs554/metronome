@@ -59,6 +59,8 @@ class ResidualMonitor:
         self._day_n: int = 0
         self._day_versions: set[str] = set()
         self.baseline: float | None = None
+        self.active_version: str | None = None
+        self.skipped_days = 0  # days whose forecasts came (partly) from a previous version
         self.resolved_total = 0
         self.alarms: list[dict[str, Any]] = []
         self.last_alarm_day: str | None = None
@@ -121,6 +123,11 @@ class ResidualMonitor:
         summary = DaySummary(self.current_day, self._day_n, day_mae, sorted(self._day_versions))
         self.days.append(summary)
         self._day_abs, self._day_n, self._day_versions = 0.0, 0, set()
+        if self.active_version is not None and summary.versions != [self.active_version]:
+            # Forecasts made by an older version resolve for up to one horizon after a swap; judging
+            # the new model by them would re-trigger a retrain on stale evidence.
+            self.skipped_days += 1
+            return None
         fired = [d.name for d in self.detectors if d.update(day_mae)]
         if fired:
             alarm = {"day": summary.day, "mae": day_mae, "detectors": fired, "baseline": self.baseline}
@@ -129,10 +136,11 @@ class ResidualMonitor:
             return alarm
         return None
 
-    def set_baseline(self, baseline: float | None, reason: str = "new model") -> None:
+    def set_baseline(self, baseline: float | None, version: str | None = None) -> None:
         """Reset detectors around a newly activated model whose validation MAE is `baseline`."""
         with self._lock:
             self.baseline = baseline
+            self.active_version = version
             for d in self.detectors:
                 d.reset(baseline=baseline)
 
@@ -143,6 +151,8 @@ class ResidualMonitor:
             rolling = float(np.mean([d.mae for d in recent])) if recent else None
             return {
                 "baseline_val_mae": self.baseline,
+                "judged_version": self.active_version,
+                "skipped_days": self.skipped_days,
                 "rolling_7d_mae": rolling,
                 "resolved_forecasts": self.resolved_total,
                 "pending_forecasts": len(self.pending),

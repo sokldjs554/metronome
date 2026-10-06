@@ -26,6 +26,9 @@ class ReplayState:
     steps: int = 0
     retrain_schedule_days: int | None = None  # periodic policy in addition to detectors (None = off)
     last_retrain_day: str | None = None
+    wait_for_retrain: bool = (
+        True  # pause the stream while a retrain job is pending (offline-protocol semantics)
+    )
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @property
@@ -42,6 +45,7 @@ class ReplayState:
             "progress": self.cursor / self.n_rows,
             "retrain_schedule_days": self.retrain_schedule_days,
             "last_retrain_day": self.last_retrain_day,
+            "wait_for_retrain": self.wait_for_retrain,
         }
 
 

@@ -57,6 +57,7 @@ class ReplayStartRequest(BaseModel):
     path: str | None = None
     start_row: int | None = Field(default=None, ge=0)
     schedule_days: int | None = Field(default=None, ge=1)
+    wait_for_retrain: bool = True
 
 
 class ReplayStepRequest(BaseModel):
@@ -117,7 +118,7 @@ class ServiceState:
         model = ServingModel(self.registry, version, threads=self.threads)  # verifies, raises on mismatch
         self.registry.activate(version)
         event = self.active.swap(model, reason=reason)
-        self.monitor.set_baseline(model.manifest.get("metrics", {}).get("val_mae_fixed"))
+        self.monitor.set_baseline(model.manifest.get("metrics", {}).get("val_mae_fixed"), version=version)
         self.m_swaps.inc()
         self.m_active.clear()
         self.m_active.labels(version=version).set(1)
@@ -271,7 +272,7 @@ def create_app(
         if rolling is not None:
             state.m_rolling.set(rolling)
         result["retrain_requested"] = None
-        if result["alarms"] and state.auto_retrain:
+        if result["alarms"] and state.auto_retrain and not state.registry.pending_jobs():
             result["retrain_requested"] = state.request_retrain(
                 {"trigger": "detector", "alarms": result["alarms"]}
             )
@@ -329,7 +330,11 @@ def create_app(
             detector_specs=tuple(d.name for d in state.monitor.detectors),
         )
         if state.active.model is not None:
-            state.monitor.set_baseline(state.active.model.manifest.get("metrics", {}).get("val_mae_fixed"))
+            state.monitor.set_baseline(
+                state.active.model.manifest.get("metrics", {}).get("val_mae_fixed"),
+                version=state.active.model.version,
+            )
+        state.replay.wait_for_retrain = req.wait_for_retrain
         return state.replay.position()
 
     @app.post("/v1/replay/step")
@@ -340,11 +345,17 @@ def create_app(
         if state.active.model is None:
             raise HTTPException(status_code=503, detail="no active model")
         alarms: list[dict[str, Any]] = []
+        blocked = False
         requests: list[dict[str, Any]] = []
         done = 0
         with rp._lock:
             for _ in range(req.steps):
                 if rp.cursor >= rp.n_rows:
+                    break
+                if rp.wait_for_retrain and state.registry.pending_jobs():
+                    blocked = (
+                        True  # the stream waits for the worker, as the offline protocol assumes a one-day lag
+                    )
                     break
                 model = state.active.model
                 origin_idx = rp.cursor - 1
@@ -376,7 +387,13 @@ def create_app(
         rolling = state.monitor.state()["rolling_7d_mae"]
         if rolling is not None:
             state.m_rolling.set(rolling)
-        return {"stepped": done, "position": rp.position(), "alarms": alarms, "retrain_requests": requests}
+        return {
+            "stepped": done,
+            "blocked_on_retrain": blocked,
+            "position": rp.position(),
+            "alarms": alarms,
+            "retrain_requests": requests,
+        }
 
     @app.get("/v1/replay")
     def replay_position() -> dict[str, Any]:
