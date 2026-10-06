@@ -26,6 +26,11 @@ from metronome.data.fetch import fetch
 M4_PARTS = ("Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Yearly")
 
 
+def freq_name(path: Path) -> str:
+    """M4-<Frequency>-train.csv -> <Frequency>."""
+    return path.stem.split("-")[1]
+
+
 @dataclass
 class EngineResult:
     engine: str
@@ -56,11 +61,11 @@ def run_polars_m4(files: list[Path], out_dir: Path) -> tuple[int, int, float]:
             .with_columns(
                 pl.col("value").cast(pl.Float64),
                 pl.col("step").str.slice(1).cast(pl.Int32) - 1,
-                pl.lit(f.stem.split("-")[0]).alias("frequency"),
+                pl.lit(freq_name(f)).alias("frequency"),
             )
             .rename({"V1": "series_id"})
         )
-        part_dir = out_dir / f"frequency={f.stem.split('-')[0]}"
+        part_dir = out_dir / f"frequency={freq_name(f)}"
         part_dir.mkdir()
         long.sink_parquet(part_dir / "part-0.parquet", compression="zstd")
         stats = (
@@ -89,9 +94,9 @@ def run_pandas_m4(files: list[Path], out_dir: Path) -> tuple[int, int, float]:
         long = long[long["value"].notna() & (long["value"] != "")]
         long["value"] = long["value"].astype("float64")
         long["step"] = long["step"].str[1:].astype("int32") - 1
-        long["frequency"] = f.stem.split("-")[0]
+        long["frequency"] = freq_name(f)
         long = long.rename(columns={"V1": "series_id"})
-        part_dir = out_dir / f"frequency={f.stem.split('-')[0]}"
+        part_dir = out_dir / f"frequency={freq_name(f)}"
         part_dir.mkdir()
         long.to_parquet(part_dir / "part-0.parquet", compression="zstd", index=False)
         stats = (
@@ -132,10 +137,10 @@ def run_spark_m4(files: list[Path], out_dir: Path, master: str = "local[4]") -> 
                     F.col("V1").alias("series_id"),
                     (F.substring("step", 2, 10).cast("int") - 1).alias("step"),
                     F.col("value").cast("double").alias("value"),
-                    F.lit(f.stem.split("-")[0]).alias("frequency"),
+                    F.lit(freq_name(f)).alias("frequency"),
                 )
             )
-            part_dir = out_dir / f"frequency={f.stem.split('-')[0]}"
+            part_dir = out_dir / f"frequency={freq_name(f)}"
             long.write.mode("overwrite").option("compression", "zstd").parquet(str(part_dir))
             stats = (
                 spark.read.parquet(str(part_dir))
