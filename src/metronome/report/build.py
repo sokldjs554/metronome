@@ -251,7 +251,15 @@ def build_charts(cadence_dir: Path, summary: dict[str, Any], charts_dir: Path) -
             if policy == "warm-1":
                 continue
             points.append(
-                Point(p["n_refits_mean"], p["mae_mean"], policy, p["kind"], p["mae_min"], p["mae_max"])
+                Point(
+                    p["n_refits_mean"],
+                    p["mae_mean"],
+                    policy,
+                    p["kind"],
+                    p["mae_min"],
+                    p["mae_max"],
+                    hollow=p.get("gated", False),
+                )
             )
         written.append(
             pareto_chart(

@@ -13,6 +13,7 @@ PALETTE = {
     "adwin": "#8e4d9e",
     "warm": "#5c7a29",
 }
+LABELLED = {"never", "periodic-1", "periodic-7", "periodic-30", "periodic-90", "warm-1"}
 FONT = "font-family='system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif'"
 
 
@@ -84,7 +85,7 @@ def _axes(
 def pareto_chart(
     points: list[Point], path: Path, title: str, xlab: str = "재학습 횟수 (1년)", ylab: str = "스트림 MAE"
 ) -> Path:
-    width, height, pad = 520, 340, (28, 16, 40, 60)
+    width, height, pad = 520, 360, (46, 16, 36, 60)
     top, right, bottom, left = pad
     xs = [p.x for p in points]
     ys = (
@@ -113,16 +114,19 @@ def pareto_chart(
             parts.append(
                 f"<rect x='{x(p.x) - 4:.1f}' y='{y(p.y) - 4:.1f}' width='8' height='8' fill='{color}'><title>{_esc(p.label)}</title></rect>"
             )
-        if p.kind in ("never", "periodic", "warm") and not p.hollow:
+        if p.label in LABELLED and not p.hollow:
             parts.append(
                 f"<text x='{x(p.x) + 6:.1f}' y='{y(p.y) - 6:.1f}' font-size='10' fill='{color}'>{_esc(p.label)}</text>"
             )
     lx = left
     for kind, color in PALETTE.items():
         if any(p.kind == kind for p in points):
-            parts.append(f"<rect x='{lx}' y='{height - 16}' width='9' height='9' fill='{color}'/>")
-            parts.append(f"<text x='{lx + 12}' y='{height - 8}' font-size='10' fill='#66706a'>{kind}</text>")
-            lx += 60
+            parts.append(f"<rect x='{lx}' y='26' width='9' height='9' fill='{color}'/>")
+            parts.append(f"<text x='{lx + 12}' y='34' font-size='10' fill='#66706a'>{kind}</text>")
+            lx += 58
+    if any(p.hollow for p in points):
+        parts.append(f"<rect x='{lx}' y='26' width='9' height='9' fill='white' stroke='#66706a'/>")
+        parts.append(f"<text x='{lx + 12}' y='34' font-size='10' fill='#66706a'>+gate (승격 게이트)</text>")
     parts.append("</svg>")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(parts), encoding="utf-8")
