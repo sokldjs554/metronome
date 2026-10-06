@@ -44,12 +44,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "${{ matrix.python-version }}", cache: pip }
+        with:
+          python-version: "${{ matrix.python-version }}"
+          cache: pip
       - run: pip install torch --index-url $TORCH_INDEX && pip install -e ".[train,export,dev]"
       - run: pytest -q -p no:cacheprovider --junitxml=junit-${{ matrix.python-version }}.xml --cov=metronome --cov-report=term
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: junit-${{ matrix.python-version }}, path: junit-*.xml }
+        with:
+          name: "junit-${{ matrix.python-version }}"
+          path: "junit-*.xml"
 
   pipeline-smoke:
     # Real data, short budget: pinned ETTh1 -> validated Parquet -> 3-day refit cache -> policies ->
