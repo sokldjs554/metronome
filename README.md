@@ -15,6 +15,15 @@ ETTh1 의 마지막 1년을 시간순으로 재생합니다. 2017-07-02 에 Page
 하나도 실패하지 않습니다(테스트로 고정). [첫 화면](docs/assets/demo/01-ready.png) · [교체 직후](docs/assets/demo/05-after-swap.png) ·
 [모바일](docs/assets/demo/06-mobile.png) · [캡처 보고서](docs/assets/demo/capture-report.json)
 
+**브라우저에서 직접 돌려보기 → [Metronome Replay](https://claude.ai/artifact/WeQtpXKZxByXb2Vd1eyUTU)** — 서버 없이 한 파일로 같은 1년 스트림을 재생합니다.
+실제 서빙 스택에서 기록한 리플레이(`scripts/record_replay.py`)의 각 버전 DLinear 가중치를 ONNX 에서 꺼내 브라우저가 직접
+예측을 계산하고, 같은 검출기(비율·Page–Hinkley·ADWIN)의 JS 포팅이 같은 날에 경보를 냅니다. 페이지는
+`scripts/build_demo_page.py` 가 기록 JSON 과 오프라인 증거(`static/evidence.json`)로 조립합니다.
+
+**내 계정에 공개 배포(Render, 무료 플랜)**: 저장소를 포크 → Render 대시보드에서 *New → Blueprint* → 포크한 저장소 선택 →
+`render.yaml` 이 `Dockerfile.demo` 를 빌드합니다(ETTh1 다운로드 + v0001 학습, 약 10분). 빌드가 끝나면 `/` 가 대시보드,
+`/ready` 가 헬스체크입니다. `METRONOME_API_KEY` 를 비우면 누구나 리플레이를 시작할 수 있는 열린 데모가 됩니다.
+
 ```bash
 docker compose run --rm init && docker compose up api worker   # http://localhost:8000
 ```
@@ -29,7 +38,7 @@ DLinear 를 4개 데이터셋의 마지막 1년(weather 는 180일) 스트림에
 |---|---:|---:|---:|---|---|
 | ETTh1 | <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/never/mae_mean:.4f -->0.4799<!-- /num --> | <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/periodic-1/mae_mean:.4f -->0.4706<!-- /num --> | <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/periodic-1/improvement_vs_never_pct:+.2f -->+1.88<!-- /num -->% | [<!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/periodic-1/ci_vs_never/lo_mean:+.4f -->-0.0131<!-- /num -->, <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/periodic-1/ci_vs_never/hi_mean:+.4f -->-0.0056<!-- /num -->] | <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/periodic-7+gate/mae_mean:.4f -->0.4690<!-- /num --> (<!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/periodic-7+gate/n_refits_mean:.1f -->16.0<!-- /num -->) |
 | ETTh2 | <!-- num:artifacts/cadence_summary.json#datasets/etth2/expanding/policies/never/mae_mean:.4f -->0.3401<!-- /num --> | <!-- num:artifacts/cadence_summary.json#datasets/etth2/expanding/policies/periodic-1/mae_mean:.4f -->0.3169<!-- /num --> | <!-- num:artifacts/cadence_summary.json#datasets/etth2/expanding/policies/periodic-1/improvement_vs_never_pct:+.2f -->+6.79<!-- /num -->% | [<!-- num:artifacts/cadence_summary.json#datasets/etth2/expanding/policies/periodic-1/ci_vs_never/lo_mean:+.4f -->-0.0297<!-- /num -->, <!-- num:artifacts/cadence_summary.json#datasets/etth2/expanding/policies/periodic-1/ci_vs_never/hi_mean:+.4f -->-0.0168<!-- /num -->] | <!-- num:artifacts/cadence_summary.json#datasets/etth2/expanding/policies/periodic-7+gate/mae_mean:.4f -->0.3166<!-- /num --> (<!-- num:artifacts/cadence_summary.json#datasets/etth2/expanding/policies/periodic-7+gate/n_refits_mean:.1f -->18.7<!-- /num -->) |
-| Weather | <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/never/mae_mean:.4f -->0.4290<!-- /num --> | <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-1/mae_mean:.4f -->0.4324<!-- /num --> | <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-1/improvement_vs_never_pct:+.2f -->-0.81<!-- /num -->% | [<!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-1/ci_vs_never/lo_mean:+.4f -->-0.0020<!-- /num -->, <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-1/ci_vs_never/hi_mean:+.4f -->+0.0094<!-- /num -->] | <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-7+gate/mae_mean:.4f -->0.4323<!-- /num --> (<!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-7+gate/n_refits_mean:.1f -->10.5<!-- /num -->) |
+| Weather | <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/never/mae_mean:.4f -->0.4359<!-- /num --> | <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-1/mae_mean:.4f -->0.4332<!-- /num --> | <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-1/improvement_vs_never_pct:+.2f -->+0.58<!-- /num -->% | [<!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-1/ci_vs_never/lo_mean:+.4f -->-0.0096<!-- /num -->, <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-1/ci_vs_never/hi_mean:+.4f -->+0.0043<!-- /num -->] | <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-7+gate/mae_mean:.4f -->0.4330<!-- /num --> (<!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-7+gate/n_refits_mean:.1f -->10.7<!-- /num -->) |
 | Electricity (20) | <!-- num:artifacts/cadence_summary.json#datasets/electricity20/expanding/policies/never/mae_mean:.4f -->0.2237<!-- /num --> | <!-- num:artifacts/cadence_summary.json#datasets/electricity20/expanding/policies/periodic-1/mae_mean:.4f -->0.2240<!-- /num --> | <!-- num:artifacts/cadence_summary.json#datasets/electricity20/expanding/policies/periodic-1/improvement_vs_never_pct:+.2f -->-0.14<!-- /num -->% | [<!-- num:artifacts/cadence_summary.json#datasets/electricity20/expanding/policies/periodic-1/ci_vs_never/lo_mean:+.4f -->-0.0001<!-- /num -->, <!-- num:artifacts/cadence_summary.json#datasets/electricity20/expanding/policies/periodic-1/ci_vs_never/hi_mean:+.4f -->+0.0008<!-- /num -->] | <!-- num:artifacts/cadence_summary.json#datasets/electricity20/expanding/policies/periodic-7+gate/mae_mean:.4f -->0.2235<!-- /num --> (<!-- num:artifacts/cadence_summary.json#datasets/electricity20/expanding/policies/periodic-7+gate/n_refits_mean:.1f -->15.0<!-- /num -->) |
 
 **답은 "데이터에 따라 다르다"이고, 그걸 미리 알 수 있다는 것이 이 프로젝트의 핵심입니다.** ETTh2 는 매일 재학습으로 MAE 가
@@ -44,7 +53,7 @@ weather 와 electricity 는 재학습해도 좋아지지 않습니다(구간이 
 사전 가설 판정 — H1(재학습은 도움이 된다): <!-- num:artifacts/cadence_summary.json#hypotheses/H1/pass -->False<!-- /num -->,
 H2(감시 정책이 적은 재학습으로 이득의 80%): <!-- num:artifacts/cadence_summary.json#hypotheses/H2/pass -->True<!-- /num -->,
 H3(웜 스타트 1/3 비용): <!-- num:artifacts/cadence_summary.json#hypotheses/H3/pass -->False<!-- /num -->,
-H4(확장 창 ≥ 슬라이딩 창): <!-- num:artifacts/cadence_summary.json#hypotheses/H4/pass -->False<!-- /num -->.
+H4(확장 창 ≥ 슬라이딩 창): <!-- num:artifacts/cadence_summary.json#hypotheses/H4/pass -->True<!-- /num -->.
 전체 격자·구간·차트는 [docs/results.md](docs/results.md) 에 있습니다.
 
 ![etth2 재학습 횟수 대 MAE](docs/assets/charts/pareto_etth2.svg)

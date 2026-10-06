@@ -19,20 +19,33 @@ from onnx import numpy_helper
 
 
 def dlinear_weights(onnx_path: Path) -> dict[str, object]:
-    """Pull the two linear layers out of a DLinear ONNX graph (names from torch.onnx export)."""
+    """Pull the two linear layers out of a DLinear ONNX graph.
+
+    torch.onnx exports nn.Linear as MatMul(x, W^T) + Add(bias); the transposed weight gets an
+    anonymous initializer name (onnx::MatMul_N), so each weight is resolved through the Add node
+    that consumes it, keyed by the bias name (seasonal.proj.bias / trend.proj.bias).
+    """
     model = onnx.load(str(onnx_path))
     inits = {t.name: numpy_helper.to_array(t) for t in model.graph.initializer}
+    matmul_weight = {}  # output tensor name -> initializer array (lookback, horizon)
+    for node in model.graph.node:
+        if node.op_type == "MatMul" and node.input[1] in inits:
+            matmul_weight[node.output[0]] = inits[node.input[1]]
     picked: dict[str, np.ndarray] = {}
-    for name, arr in inits.items():
-        key = name.lower()
-        if "seasonal" in key and arr.ndim == 2:
-            picked["seasonal_w"] = arr
-        elif "seasonal" in key and arr.ndim == 1:
-            picked["seasonal_b"] = arr
-        elif "trend" in key and arr.ndim == 2:
-            picked["trend_w"] = arr
-        elif "trend" in key and arr.ndim == 1:
-            picked["trend_b"] = arr
+    for node in model.graph.node:
+        if node.op_type != "Add":
+            continue
+        bias = [i for i in node.input if i in inits and inits[i].ndim == 1]
+        prod = [i for i in node.input if i in matmul_weight]
+        if len(bias) != 1 or len(prod) != 1:
+            continue
+        branch = (
+            "seasonal" if "seasonal" in bias[0].lower() else "trend" if "trend" in bias[0].lower() else None
+        )
+        if branch is None:
+            continue
+        picked[f"{branch}_w"] = matmul_weight[prod[0]].T  # -> (horizon, lookback)
+        picked[f"{branch}_b"] = inits[bias[0]]
     if len(picked) != 4:
         raise RuntimeError(f"unexpected initializers in {onnx_path}: {list(inits)}")
 
@@ -56,18 +69,31 @@ def main() -> None:
     ap.add_argument("--registry", default="registry/etth1")
     ap.add_argument("--out", default="artifacts/demo/replay_record.json")
     ap.add_argument("--step", type=int, default=24)
+    ap.add_argument(
+        "--collect-only",
+        action="store_true",
+        help="do not replay; read the finished replay state from the running server",
+    )
     args = ap.parse_args()
     reg = Path(args.registry)
     c = httpx.Client(base_url=args.url, timeout=120)
     dep = c.get("/v1/deployment").json()
-    start = c.post("/v1/replay/start", json={}).json()
-    print("replay start", start["cursor"], "/", start["n_rows"])
     steps: list[dict[str, object]] = []
     alarms: list[dict[str, object]] = []
     requests: list[dict[str, object]] = []
     t0 = time.time()
     blocked_total = 0.0
-    while True:
+    if args.collect_only:
+        state = c.get("/v1/replay").json()
+        start = {"cursor": state["started_at"], "n_rows": state["n_rows"]}
+        steps = [{"cursor": state["cursor"], "time": state["current_time"], "stepped": state["steps"]}]
+        requests = c.get("/v1/events").json()["retrain_requests"]
+        # With wait_for_retrain every alarm turned into a request, so the requests carry all alarms.
+        alarms = [a for r in requests for a in r.get("alarms", [])]
+    else:
+        start = c.post("/v1/replay/start", json={}).json()
+        print("replay start", start["cursor"], "/", start["n_rows"])
+    while not args.collect_only:
         r = c.post("/v1/replay/step", json={"steps": args.step}).json()
         if r["blocked_on_retrain"]:
             blocked_total += 1.0
