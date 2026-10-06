@@ -1,12 +1,12 @@
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 520 360' width='520' height='360' font-family='system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif' font-size='12'>
 <rect width='520' height='360' fill='white'/>
-<text x='60' y='18' font-size='14' font-weight='600' fill='#1d2320'>etth1: 재학습 횟수 대 스트림 MAE (시드 1개 평균, 막대 = 최소–최대)</text>
+<text x='60' y='18' font-size='14' font-weight='600' fill='#1d2320'>etth1: 재학습 횟수 대 스트림 MAE (시드 3개 평균, 막대 = 최소–최대)</text>
 <text x='282.0' y='354' text-anchor='middle' fill='#66706a'>재학습 횟수 (1년)</text>
 <text transform='translate(14,185.0) rotate(-90)' text-anchor='middle' fill='#66706a'>스트림 MAE</text>
 <line x1='60' x2='504' y1='324' y2='324' stroke='#cfd4d0'/>
 <line x1='60' x2='60' y1='46' y2='324' stroke='#cfd4d0'/>
 <line x1='60' x2='504' y1='324.0' y2='324.0' stroke='#eceeea'/>
-<text x='54' y='328.0' text-anchor='end' fill='#66706a' font-size='11'>0.459</text>
+<text x='54' y='328.0' text-anchor='end' fill='#66706a' font-size='11'>0.458</text>
 <text x='60.0' y='340' text-anchor='middle' fill='#66706a' font-size='11'>0</text>
 <line x1='60' x2='504' y1='254.5' y2='254.5' stroke='#eceeea'/>
 <text x='54' y='258.5' text-anchor='end' fill='#66706a' font-size='11'>0.483</text>
@@ -20,89 +20,89 @@
 <line x1='60' x2='504' y1='46.0' y2='46.0' stroke='#eceeea'/>
 <text x='54' y='50.0' text-anchor='end' fill='#66706a' font-size='11'>0.556</text>
 <text x='504.0' y='340' text-anchor='middle' fill='#66706a' font-size='11'>382</text>
-<line x1='60.0' x2='60.0' y1='287.6' y2='287.6' stroke='#8a8f8c' stroke-width='1.2' opacity='.6'/>
-<circle cx='60.0' cy='287.6' r='4.5' fill='#8a8f8c'><title>never</title></circle>
-<text x='66.0' y='281.6' font-size='10' fill='#8a8f8c'>never</text>
-<line x1='482.9' x2='482.9' y1='291.5' y2='291.5' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='482.9' cy='291.5' r='4.5' fill='#1f6f5f'><title>periodic-1</title></circle>
-<text x='488.9' y='285.5' font-size='10' fill='#1f6f5f'>periodic-1</text>
-<line x1='85.6' x2='85.6' y1='292.4' y2='292.4' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='85.6' cy='292.4' r='4.5' fill='#1f6f5f'><title>periodic-1+gate</title></circle>
-<line x1='200.6' x2='200.6' y1='289.9' y2='289.9' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<line x1='60.0' x2='60.0' y1='290.3' y2='210.3' stroke='#8a8f8c' stroke-width='1.2' opacity='.6'/>
+<circle cx='60.0' cy='262.5' r='4.5' fill='#8a8f8c'><title>never</title></circle>
+<text x='66.0' y='256.5' font-size='10' fill='#8a8f8c'>never</text>
+<line x1='482.9' x2='482.9' y1='290.8' y2='288.1' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='482.9' cy='289.1' r='4.5' fill='#1f6f5f'><title>periodic-1</title></circle>
+<text x='488.9' y='283.1' font-size='10' fill='#1f6f5f'>periodic-1</text>
+<line x1='85.9' x2='85.9' y1='294.2' y2='291.3' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='85.9' cy='292.4' r='4.5' fill='#1f6f5f'><title>periodic-1+gate</title></circle>
+<line x1='200.6' x2='200.6' y1='291.6' y2='289.1' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
 <circle cx='200.6' cy='289.9' r='4.5' fill='#1f6f5f'><title>periodic-3</title></circle>
-<line x1='79.7' x2='79.7' y1='297.1' y2='297.1' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='79.7' cy='297.1' r='4.5' fill='#1f6f5f'><title>periodic-3+gate</title></circle>
-<line x1='120.4' x2='120.4' y1='289.9' y2='289.9' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='120.4' cy='289.9' r='4.5' fill='#1f6f5f'><title>periodic-7</title></circle>
-<text x='126.4' y='283.9' font-size='10' fill='#1f6f5f'>periodic-7</text>
-<line x1='79.7' x2='79.7' y1='294.0' y2='294.0' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='79.7' cy='294.0' r='4.5' fill='#1f6f5f'><title>periodic-7+gate</title></circle>
-<line x1='90.2' x2='90.2' y1='290.0' y2='290.0' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='90.2' cy='290.0' r='4.5' fill='#1f6f5f'><title>periodic-14</title></circle>
-<line x1='76.3' x2='76.3' y1='291.0' y2='291.0' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='76.3' cy='291.0' r='4.5' fill='#1f6f5f'><title>periodic-14+gate</title></circle>
-<line x1='73.9' x2='73.9' y1='286.4' y2='286.4' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='73.9' cy='286.4' r='4.5' fill='#1f6f5f'><title>periodic-30</title></circle>
-<text x='79.9' y='280.4' font-size='10' fill='#1f6f5f'>periodic-30</text>
-<line x1='65.8' x2='65.8' y1='276.6' y2='276.6' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='65.8' cy='276.6' r='4.5' fill='#1f6f5f'><title>periodic-30+gate</title></circle>
-<line x1='67.0' x2='67.0' y1='289.3' y2='289.3' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='67.0' cy='289.3' r='4.5' fill='#1f6f5f'><title>periodic-60</title></circle>
-<line x1='64.6' x2='64.6' y1='283.0' y2='283.0' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='64.6' cy='283.0' r='4.5' fill='#1f6f5f'><title>periodic-60+gate</title></circle>
-<line x1='64.6' x2='64.6' y1='291.4' y2='291.4' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='64.6' cy='291.4' r='4.5' fill='#1f6f5f'><title>periodic-90</title></circle>
-<text x='70.6' y='285.4' font-size='10' fill='#1f6f5f'>periodic-90</text>
-<line x1='61.2' x2='61.2' y1='290.0' y2='290.0' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
-<circle cx='61.2' cy='290.0' r='4.5' fill='#1f6f5f'><title>periodic-90+gate</title></circle>
-<line x1='67.0' x2='67.0' y1='276.3' y2='276.3' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
-<rect x='63.0' y='272.3' width='8' height='8' fill='#c8742b'><title>ratio-0.1</title></rect>
-<line x1='63.5' x2='63.5' y1='276.7' y2='276.7' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
-<rect x='59.5' y='272.7' width='8' height='8' fill='#c8742b'><title>ratio-0.1+gate</title></rect>
-<line x1='64.6' x2='64.6' y1='286.4' y2='286.4' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
-<rect x='60.6' y='282.4' width='8' height='8' fill='#c8742b'><title>ratio-0.2</title></rect>
-<line x1='63.5' x2='63.5' y1='276.7' y2='276.7' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
-<rect x='59.5' y='272.7' width='8' height='8' fill='#c8742b'><title>ratio-0.2+gate</title></rect>
-<line x1='64.6' x2='64.6' y1='72.9' y2='72.9' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
-<rect x='60.6' y='68.9' width='8' height='8' fill='#c8742b'><title>ratio-0.3</title></rect>
-<line x1='62.3' x2='62.3' y1='245.6' y2='245.6' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
-<rect x='58.3' y='241.6' width='8' height='8' fill='#c8742b'><title>ratio-0.3+gate</title></rect>
-<line x1='62.3' x2='62.3' y1='83.7' y2='83.7' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
-<rect x='58.3' y='79.7' width='8' height='8' fill='#c8742b'><title>ratio-0.5</title></rect>
-<line x1='61.2' x2='61.2' y1='292.1' y2='292.1' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
-<rect x='57.2' y='288.1' width='8' height='8' fill='#c8742b'><title>ratio-0.5+gate</title></rect>
-<line x1='90.2' x2='90.2' y1='290.6' y2='290.6' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
-<rect x='86.2' y='286.6' width='8' height='8' fill='#4b5ea6'><title>ph-0.05</title></rect>
-<line x1='73.9' x2='73.9' y1='288.7' y2='288.7' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
-<rect x='69.9' y='284.7' width='8' height='8' fill='#4b5ea6'><title>ph-0.05+gate</title></rect>
-<line x1='85.6' x2='85.6' y1='295.5' y2='295.5' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
-<rect x='81.6' y='291.5' width='8' height='8' fill='#4b5ea6'><title>ph-0.1</title></rect>
-<line x1='73.9' x2='73.9' y1='288.2' y2='288.2' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
-<rect x='69.9' y='284.2' width='8' height='8' fill='#4b5ea6'><title>ph-0.1+gate</title></rect>
-<line x1='77.4' x2='77.4' y1='288.0' y2='288.0' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
-<rect x='73.4' y='284.0' width='8' height='8' fill='#4b5ea6'><title>ph-0.2</title></rect>
-<line x1='71.6' x2='71.6' y1='286.4' y2='286.4' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
-<rect x='67.6' y='282.4' width='8' height='8' fill='#4b5ea6'><title>ph-0.2+gate</title></rect>
-<line x1='73.9' x2='73.9' y1='291.6' y2='291.6' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
-<rect x='69.9' y='287.6' width='8' height='8' fill='#4b5ea6'><title>ph-0.4</title></rect>
-<line x1='70.5' x2='70.5' y1='287.1' y2='287.1' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
-<rect x='66.5' y='283.1' width='8' height='8' fill='#4b5ea6'><title>ph-0.4+gate</title></rect>
-<line x1='60.0' x2='60.0' y1='287.6' y2='287.6' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
-<rect x='56.0' y='283.6' width='8' height='8' fill='#8e4d9e'><title>adwin-0.001</title></rect>
-<line x1='60.0' x2='60.0' y1='287.6' y2='287.6' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
-<rect x='56.0' y='283.6' width='8' height='8' fill='#8e4d9e'><title>adwin-0.001+gate</title></rect>
-<line x1='61.2' x2='61.2' y1='291.1' y2='291.1' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
-<rect x='57.2' y='287.1' width='8' height='8' fill='#8e4d9e'><title>adwin-0.01</title></rect>
-<line x1='61.2' x2='61.2' y1='291.1' y2='291.1' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
-<rect x='57.2' y='287.1' width='8' height='8' fill='#8e4d9e'><title>adwin-0.01+gate</title></rect>
-<line x1='61.2' x2='61.2' y1='289.9' y2='289.9' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
-<rect x='57.2' y='285.9' width='8' height='8' fill='#8e4d9e'><title>adwin-0.1</title></rect>
-<line x1='60.0' x2='60.0' y1='287.6' y2='287.6' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
-<rect x='56.0' y='283.6' width='8' height='8' fill='#8e4d9e'><title>adwin-0.1+gate</title></rect>
-<line x1='62.3' x2='62.3' y1='287.3' y2='287.3' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
-<rect x='58.3' y='283.3' width='8' height='8' fill='#8e4d9e'><title>adwin-0.3</title></rect>
-<line x1='61.2' x2='61.2' y1='292.2' y2='292.2' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
-<rect x='57.2' y='288.2' width='8' height='8' fill='#8e4d9e'><title>adwin-0.3+gate</title></rect>
+<line x1='81.3' x2='81.3' y1='296.4' y2='286.5' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='81.3' cy='290.9' r='4.5' fill='#1f6f5f'><title>periodic-3+gate</title></circle>
+<line x1='120.4' x2='120.4' y1='295.1' y2='287.7' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='120.4' cy='290.7' r='4.5' fill='#1f6f5f'><title>periodic-7</title></circle>
+<text x='126.4' y='284.7' font-size='10' fill='#1f6f5f'>periodic-7</text>
+<line x1='78.6' x2='78.6' y1='295.0' y2='292.7' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='78.6' cy='293.6' r='4.5' fill='#1f6f5f'><title>periodic-7+gate</title></circle>
+<line x1='90.2' x2='90.2' y1='297.1' y2='286.4' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='90.2' cy='290.9' r='4.5' fill='#1f6f5f'><title>periodic-14</title></circle>
+<line x1='74.7' x2='74.7' y1='295.9' y2='290.1' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='74.7' cy='292.1' r='4.5' fill='#1f6f5f'><title>periodic-14+gate</title></circle>
+<line x1='73.9' x2='73.9' y1='285.7' y2='279.3' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='73.9' cy='283.4' r='4.5' fill='#1f6f5f'><title>periodic-30</title></circle>
+<text x='79.9' y='277.4' font-size='10' fill='#1f6f5f'>periodic-30</text>
+<line x1='64.6' x2='64.6' y1='290.2' y2='275.9' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='64.6' cy='282.3' r='4.5' fill='#1f6f5f'><title>periodic-30+gate</title></circle>
+<line x1='67.0' x2='67.0' y1='288.6' y2='276.0' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='67.0' cy='283.7' r='4.5' fill='#1f6f5f'><title>periodic-60</title></circle>
+<line x1='62.3' x2='62.3' y1='283.9' y2='252.4' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='62.3' cy='272.9' r='4.5' fill='#1f6f5f'><title>periodic-60+gate</title></circle>
+<line x1='64.6' x2='64.6' y1='292.9' y2='269.0' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='64.6' cy='284.2' r='4.5' fill='#1f6f5f'><title>periodic-90</title></circle>
+<text x='70.6' y='278.2' font-size='10' fill='#1f6f5f'>periodic-90</text>
+<line x1='61.5' x2='61.5' y1='291.3' y2='266.1' stroke='#1f6f5f' stroke-width='1.2' opacity='.6'/>
+<circle cx='61.5' cy='282.2' r='4.5' fill='#1f6f5f'><title>periodic-90+gate</title></circle>
+<line x1='67.0' x2='67.0' y1='277.0' y2='115.3' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
+<rect x='63.0' y='218.6' width='8' height='8' fill='#c8742b'><title>ratio-0.1</title></rect>
+<line x1='63.9' x2='63.9' y1='276.0' y2='232.1' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
+<rect x='59.9' y='248.3' width='8' height='8' fill='#c8742b'><title>ratio-0.1+gate</title></rect>
+<line x1='65.0' x2='65.0' y1='289.9' y2='114.2' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
+<rect x='61.0' y='225.9' width='8' height='8' fill='#c8742b'><title>ratio-0.2</title></rect>
+<line x1='63.5' x2='63.5' y1='294.1' y2='232.5' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
+<rect x='59.5' y='263.6' width='8' height='8' fill='#c8742b'><title>ratio-0.2+gate</title></rect>
+<line x1='64.3' x2='64.3' y1='293.5' y2='72.9' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
+<rect x='60.3' y='198.8' width='8' height='8' fill='#c8742b'><title>ratio-0.3</title></rect>
+<line x1='62.3' x2='62.3' y1='288.9' y2='245.0' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
+<rect x='58.3' y='267.0' width='8' height='8' fill='#c8742b'><title>ratio-0.3+gate</title></rect>
+<line x1='62.3' x2='62.3' y1='272.0' y2='83.7' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
+<rect x='58.3' y='153.2' width='8' height='8' fill='#c8742b'><title>ratio-0.5</title></rect>
+<line x1='61.2' x2='61.2' y1='291.4' y2='289.3' stroke='#c8742b' stroke-width='1.2' opacity='.6'/>
+<rect x='57.2' y='286.6' width='8' height='8' fill='#c8742b'><title>ratio-0.5+gate</title></rect>
+<line x1='89.0' x2='89.0' y1='294.6' y2='289.9' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
+<rect x='85.0' y='289.0' width='8' height='8' fill='#4b5ea6'><title>ph-0.05</title></rect>
+<line x1='74.3' x2='74.3' y1='295.0' y2='288.0' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
+<rect x='70.3' y='288.6' width='8' height='8' fill='#4b5ea6'><title>ph-0.05+gate</title></rect>
+<line x1='85.2' x2='85.2' y1='294.7' y2='286.7' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
+<rect x='81.2' y='286.2' width='8' height='8' fill='#4b5ea6'><title>ph-0.1</title></rect>
+<line x1='74.3' x2='74.3' y1='293.0' y2='287.5' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
+<rect x='70.3' y='286.2' width='8' height='8' fill='#4b5ea6'><title>ph-0.1+gate</title></rect>
+<line x1='77.8' x2='77.8' y1='289.1' y2='280.2' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
+<rect x='73.8' y='281.5' width='8' height='8' fill='#4b5ea6'><title>ph-0.2</title></rect>
+<line x1='71.2' x2='71.2' y1='292.6' y2='285.7' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
+<rect x='67.2' y='285.3' width='8' height='8' fill='#4b5ea6'><title>ph-0.2+gate</title></rect>
+<line x1='74.7' x2='74.7' y1='290.9' y2='274.5' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
+<rect x='70.7' y='279.7' width='8' height='8' fill='#4b5ea6'><title>ph-0.4</title></rect>
+<line x1='70.5' x2='70.5' y1='288.7' y2='286.4' stroke='#4b5ea6' stroke-width='1.2' opacity='.6'/>
+<rect x='66.5' y='283.3' width='8' height='8' fill='#4b5ea6'><title>ph-0.4+gate</title></rect>
+<line x1='60.0' x2='60.0' y1='290.3' y2='210.3' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
+<rect x='56.0' y='258.5' width='8' height='8' fill='#8e4d9e'><title>adwin-0.001</title></rect>
+<line x1='60.0' x2='60.0' y1='290.3' y2='210.3' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
+<rect x='56.0' y='258.5' width='8' height='8' fill='#8e4d9e'><title>adwin-0.001+gate</title></rect>
+<line x1='61.2' x2='61.2' y1='292.0' y2='250.0' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
+<rect x='57.2' y='273.5' width='8' height='8' fill='#8e4d9e'><title>adwin-0.01</title></rect>
+<line x1='60.8' x2='60.8' y1='290.4' y2='250.0' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
+<rect x='56.8' y='272.9' width='8' height='8' fill='#8e4d9e'><title>adwin-0.01+gate</title></rect>
+<line x1='61.2' x2='61.2' y1='289.9' y2='256.2' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
+<rect x='57.2' y='274.4' width='8' height='8' fill='#8e4d9e'><title>adwin-0.1</title></rect>
+<line x1='60.4' x2='60.4' y1='290.3' y2='256.2' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
+<rect x='56.4' y='273.8' width='8' height='8' fill='#8e4d9e'><title>adwin-0.1+gate</title></rect>
+<line x1='62.3' x2='62.3' y1='289.5' y2='258.2' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
+<rect x='58.3' y='274.1' width='8' height='8' fill='#8e4d9e'><title>adwin-0.3</title></rect>
+<line x1='61.9' x2='61.9' y1='291.5' y2='258.2' stroke='#8e4d9e' stroke-width='1.2' opacity='.6'/>
+<rect x='57.9' y='275.7' width='8' height='8' fill='#8e4d9e'><title>adwin-0.3+gate</title></rect>
 <rect x='60' y='26' width='9' height='9' fill='#8a8f8c'/>
 <text x='72' y='34' font-size='10' fill='#66706a'>never</text>
 <rect x='118' y='26' width='9' height='9' fill='#1f6f5f'/>

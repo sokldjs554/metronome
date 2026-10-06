@@ -162,6 +162,13 @@ def judge_hypotheses(summary: dict[str, Any]) -> dict[str, Any]:
                     best = row
         if best:
             h2_rows[name] = best
+        elif pol:  # daily retraining did not beat never: no gain to take a fraction of
+            h2_rows[name] = {
+                "policy": "—",
+                "gain_fraction": float("nan"),
+                "n_refits": float("nan"),
+                "pass": False,
+            }
     out["H2"] = {"rows": h2_rows, "pass": any(r["pass"] for r in h2_rows.values())}
     # H3: warm-1 within +1% MAE of periodic-1 at <= 1/3 of the training seconds (etth1, etth2)
     h3_rows = {}
