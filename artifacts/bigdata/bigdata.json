@@ -1,0 +1,69 @@
+{
+  "source": {
+    "name": "M4 train (6 frequencies)",
+    "files": [
+      "M4-Hourly-train.csv",
+      "M4-Daily-train.csv",
+      "M4-Weekly-train.csv",
+      "M4-Monthly-train.csv",
+      "M4-Quarterly-train.csv",
+      "M4-Yearly-train.csv"
+    ],
+    "bytes": 257927050
+  },
+  "repeats": 3,
+  "cpu_count": 4,
+  "machine": "x86_64",
+  "versions": {
+    "polars": "1.44.2",
+    "numpy": "2.5.3",
+    "pandas": "3.0.6",
+    "pyspark": "4.2.0"
+  },
+  "engines": [
+    {
+      "engine": "polars",
+      "source": "m4",
+      "seconds": [
+        8.26879581500009,
+        6.841509692999921,
+        7.46400788699998
+      ],
+      "median_seconds": 7.46400788699998,
+      "n_cells": 24002047,
+      "n_series": 100000,
+      "parquet_bytes": 89563391,
+      "checksum": 409255600.4289824
+    },
+    {
+      "engine": "pandas",
+      "source": "m4",
+      "seconds": [
+        137.76450435999993,
+        137.530782381,
+        130.79330893300005
+      ],
+      "median_seconds": 137.530782381,
+      "n_cells": 24002047,
+      "n_series": 100000,
+      "parquet_bytes": 127039861,
+      "checksum": 409255600.4289824
+    },
+    {
+      "engine": "spark",
+      "source": "m4",
+      "seconds": [
+        1271.741393969,
+        1225.8706614529997,
+        1232.15651032
+      ],
+      "median_seconds": 1232.15651032,
+      "n_cells": 24002047,
+      "n_series": 100000,
+      "parquet_bytes": 95406161,
+      "checksum": 409255600.4289795
+    }
+  ],
+  "agree": true,
+  "notes": "Run on an otherwise idle 4-vCPU container (serving stack stopped, no cache jobs); a ~20 s unit-test run overlapped the first pandas repeat. Engines ran sequentially: polars, pandas, spark; each repeat deletes and rewrites its Parquet directory."
+}

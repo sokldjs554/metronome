@@ -43,8 +43,10 @@
 
 ## 대용량 처리
 
-- M4(100,000개 시계열)·electricity·traffic 은 한 머신의 Polars / pandas / PySpark `local[4]` 로 처리했습니다.
-  다중 노드 클러스터 운영을 주장하지 않습니다. 세 엔진의 셀 수·집계가 같다는 것만 검사합니다.
+- 세 엔진 비교(Polars / pandas / PySpark `local[4]`)는 M4(100,000개 시계열, 24M 셀) 한 작업이고, 한 머신에서 돌렸습니다.
+  electricity(321 채널)·traffic(862 채널)은 Polars 전처리 파이프라인으로만 처리했습니다. 다중 노드 클러스터 운영을
+  주장하지 않습니다. 세 엔진의 셀 수·집계가 같다는 것만 검사하며, Spark 가 이 작업에서 두 자릿수 느린 이유는
+  [bigdata.md](bigdata.md) 에 적었습니다.
 
 ## 협업
 
