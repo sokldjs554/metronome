@@ -27,6 +27,7 @@ artifacts/demo/*.webm
 registry/
 mlruns/
 mlartifacts/
+mlflow.db
 .dvc/cache/
 .dvc/tmp/
 *.log

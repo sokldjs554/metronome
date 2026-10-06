@@ -1,0 +1,25 @@
+# Single-container public demo: downloads ETTh1 (checksum-pinned) and trains the first version at
+# build time, then serves the API, dashboard and the in-process retrain worker (`metronome demo`).
+# Production uses Dockerfile (serve) + Dockerfile.worker instead; this image exists so a free
+# single-service host can show the whole non-stop loop.
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    METRONOME_REGISTRY=/app/registry/etth1 \
+    PORT=8000
+
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir ".[train,export]"
+
+# Reproducible registry baked into the image: pinned source -> validated Parquet -> v0001.
+RUN metronome prepare etth1 \
+    && metronome deploy-init etth1 --registry /app/registry/etth1 --threads 2 --max-epochs 10 \
+    && rm -rf data/raw
+
+EXPOSE 8000
+CMD ["sh", "-c", "metronome demo --registry \"$METRONOME_REGISTRY\" --host 0.0.0.0 --port \"$PORT\""]

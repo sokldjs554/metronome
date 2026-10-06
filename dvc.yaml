@@ -1,0 +1,66 @@
+# Reproducible pipeline. `dvc repro` rebuilds only what changed (code, params, or data hash).
+# Heavy stages are gated behind params so CI can run the cheap path (see params.yaml).
+stages:
+  prepare:
+    cmd: metronome prepare etth1 etth2 weather electricity20
+    deps:
+      - src/metronome/data
+    outs:
+      - data/processed/etth1.parquet
+      - data/processed/etth2.parquet
+      - data/processed/weather.parquet
+      - data/processed/electricity20.parquet
+
+  ltsf:
+    cmd: bash scripts/run_ltsf_all.sh
+    deps:
+      - scripts/run_ltsf_all.sh
+      - src/metronome/eval/ltsf.py
+      - src/metronome/models
+      - src/metronome/train
+      - data/processed/etth1.parquet
+      - data/processed/etth2.parquet
+    outs:
+      - artifacts/runs:
+          persist: true
+
+  cache:
+    cmd: bash scripts/run_cache_all.sh
+    deps:
+      - scripts/run_cache_all.sh
+      - src/metronome/cadence/cache.py
+      - src/metronome/models/linear.py
+      - src/metronome/train/trainer.py
+      - data/processed/etth1.parquet
+      - data/processed/etth2.parquet
+      - data/processed/weather.parquet
+      - data/processed/electricity20.parquet
+    params:
+      - cadence.seeds
+      - cadence.max_epochs
+    outs:
+      - artifacts/cache:
+          persist: true
+
+  simulate:
+    cmd: >
+      metronome simulate $(ls artifacts/cache/*.npz | grep -v _warm | xargs -n1 basename | sed 's/.npz//')
+    deps:
+      - src/metronome/cadence/simulate.py
+      - src/metronome/drift/detectors.py
+      - src/metronome/eval/bootstrap.py
+      - artifacts/cache
+    outs:
+      - artifacts/cadence
+
+  report:
+    cmd: metronome report
+    deps:
+      - src/metronome/report
+      - artifacts/cadence
+      - artifacts/runs
+    outs:
+      - artifacts/cadence_summary.json
+      - docs/results.md
+      - src/metronome/static/evidence.json
+      - docs/assets/charts

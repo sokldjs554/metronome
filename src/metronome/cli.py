@@ -46,6 +46,9 @@ def cache(
     window: str = "expanding",
     workers: int = 4,
     max_epochs: int = 10,
+    limit_days: Annotated[
+        int | None, typer.Option(help="build only the first N stream days (CI smoke)")
+    ] = None,
     processed_dir: Path = PROCESSED,
     cache_dir: Path = CACHE,
 ) -> None:
@@ -60,7 +63,8 @@ def cache(
         window=window,
         train=TrainConfig(lr=0.005, batch_size=32, max_epochs=max_epochs, patience=3, threads=1),
     )
-    typer.echo(f"wrote {build_cache(cfg, processed_dir, cache_dir, workers=workers)}")
+    days = list(range(limit_days)) if limit_days else None
+    typer.echo(f"wrote {build_cache(cfg, processed_dir, cache_dir, workers=workers, days=days)}")
 
 
 @app.command()
@@ -265,6 +269,92 @@ def worker(
     done = run_worker(cfg, once=once)
     for d in done:
         typer.echo(f"{d['job']} -> {d['version']} val_mae_fixed={d['metrics']['val_mae_fixed']:.4f}")
+
+
+@app.command()
+def demo(
+    registry: Path = Path("registry/etth1"),
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    threads: int = 1,
+    max_epochs: int = 10,
+) -> None:
+    """Single-process demo: the API plus an in-process retrain worker thread (same HTTP code path)."""
+    import logging
+    import os
+    import threading
+
+    import uvicorn
+
+    from metronome.serving.app import create_app
+    from metronome.serving.worker import WorkerConfig, run_worker
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    api_key = os.environ.get("METRONOME_API_KEY") or None
+    application = create_app(registry, api_key=api_key, threads=threads)
+    cfg = WorkerConfig(
+        registry_root=registry,
+        stream_path=registry / "stream.npz",
+        api_url=f"http://127.0.0.1:{port}",
+        api_key=api_key,
+        max_epochs=max_epochs,
+        threads=threads,
+        poll_seconds=2.0,
+    )
+    threading.Thread(
+        target=run_worker, args=(cfg,), kwargs={"once": False}, daemon=True, name="worker"
+    ).start()
+    uvicorn.run(application, host=host, port=port, log_level="info")
+
+
+@app.command()
+def report(root: Path = Path(".")) -> None:
+    """Aggregate artifacts -> summaries, charts, dashboard evidence (docs quote these via markers)."""
+    from metronome.report.build import build_all
+
+    out = build_all(root)
+    hyp = out["cadence_summary"].get("hypotheses", {})
+    for name, h in hyp.items():
+        typer.echo(f"{name}: {'PASS' if h.get('pass') else 'FAIL'} ({len(h.get('rows', {}))} rows)")
+    typer.echo(f"charts: {len(out['charts'])}, ltsf runs: {len(out['ltsf_summary']['runs'])}")
+
+
+@app.command()
+def bigdata(
+    raw_dir: Path = RAW,
+    out_dir: Path = Path("artifacts/bigdata"),
+    local_dir: Path | None = None,
+    engines: str = "polars,pandas,spark",
+    repeats: int = 3,
+) -> None:
+    """Wide->long M4 pipeline in Polars / pandas / PySpark with cross-engine agreement (P12)."""
+    from metronome.bigdata.engines import run_stage
+
+    rep = run_stage(raw_dir, out_dir, local_dir=local_dir, engines=tuple(engines.split(",")), repeats=repeats)
+    for e in rep["engines"]:
+        typer.echo(
+            f"{e['engine']:7s} median {e['median_seconds']:.1f}s cells={e['n_cells']:,} series={e['n_series']:,}"
+        )
+
+
+@app.command("mlflow-log")
+def mlflow_log(
+    tracking_uri: str = "sqlite:///mlflow.db",
+    runs_dir: Path = RUNS,
+    cadence_dir: Path = Path("artifacts/cadence"),
+    registry: Path | None = None,
+) -> None:
+    """Mirror LTSF runs, cadence results and the file registry into MLflow (tracking + model registry)."""
+    from metronome.tracking.mlflow_log import log_cadence, log_ltsf_runs, register_versions
+
+    n_runs = len(log_ltsf_runs(runs_dir, tracking_uri)) if runs_dir.exists() else 0
+    n_cad = len(log_cadence(cadence_dir, tracking_uri)) if cadence_dir.exists() else 0
+    typer.echo(f"logged {n_runs} ltsf runs, {n_cad} cadence runs")
+    if registry is not None:
+        for row in register_versions(registry, tracking_uri):
+            typer.echo(
+                f"registry {row['version']} -> mlflow v{row['mlflow_version']} verified={row['verified']} active={row['active']}"
+            )
 
 
 if __name__ == "__main__":

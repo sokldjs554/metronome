@@ -1,0 +1,8 @@
+cadence:
+  seeds: [0, 1, 2]
+  max_epochs: 10
+  lookback: 336
+  horizon: 96
+  val_days: 14
+ltsf:
+  seed: 2021

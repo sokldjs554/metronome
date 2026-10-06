@@ -1,0 +1,16 @@
+# Render blueprint for the public demo (single free web service, Docker runtime).
+# The image trains v0001 at build time from the checksum-pinned ETTh1 source; the in-process
+# worker retrains when the monitor or the replay schedule asks for it.
+services:
+  - type: web
+    name: metronome-demo
+    runtime: docker
+    dockerfilePath: ./Dockerfile.demo
+    plan: free
+    region: singapore
+    healthCheckPath: /ready
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: METRONOME_API_KEY
+        sync: false   # set in the dashboard to protect activate/replay endpoints; leave empty for an open demo

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -27,10 +28,16 @@ def main() -> None:
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    report: dict[str, object] = {"url": args.url, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    report: dict[str, object] = {
+        "url": args.url,
+        "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
 
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        # The sandbox ships Chromium under /opt/pw-browsers; a newer pip playwright may expect another
+        # build number, so allow pointing at the installed binary explicitly.
+        exe = os.environ.get("METRONOME_CHROMIUM")
+        browser = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
         ctx_kwargs: dict[str, object] = {"viewport": {"width": 1280, "height": 1000}, "locale": "ko-KR"}
         if args.video:
             ctx_kwargs["record_video_dir"] = str(out / "video")
@@ -48,7 +55,9 @@ def main() -> None:
         page.screenshot(path=str(out / "02-replay-started.png"), full_page=True)
 
         swapped = False
-        first_version = page.evaluate("() => fetch('/v1/models').then(r => r.json()).then(m => m.active.version)")
+        first_version = page.evaluate(
+            "() => fetch('/v1/models').then(r => r.json()).then(m => m.active.version)"
+        )
         report["first_version"] = first_version
         for step in range(args.max_steps):
             page.click("#btn-step1")
@@ -85,7 +94,11 @@ def main() -> None:
                 if shutil.which("ffmpeg"):
                     subprocess.run(
                         [
-                            "ffmpeg", "-y", "-i", str(out / "demo.webm"), "-vf",
+                            "ffmpeg",
+                            "-y",
+                            "-i",
+                            str(out / "demo.webm"),
+                            "-vf",
                             "fps=6,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer",
                             str(out / "demo.gif"),
                         ],
@@ -93,7 +106,9 @@ def main() -> None:
                         capture_output=True,
                     )
     (out / "capture-report.json").write_text(json.dumps(report, indent=2, default=str))
-    print(json.dumps({k: v for k, v in report.items() if k not in {"monitor", "models"}}, indent=2, default=str))
+    print(
+        json.dumps({k: v for k, v in report.items() if k not in {"monitor", "models"}}, indent=2, default=str)
+    )
 
 
 if __name__ == "__main__":

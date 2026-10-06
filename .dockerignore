@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.pyc
+data/
+artifacts/cache
+artifacts/runs
+artifacts/logs
+artifacts/demo
+registry/
+mlruns/
+tests/
+docs/
+.github/

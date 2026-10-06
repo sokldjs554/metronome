@@ -1,0 +1,46 @@
+# Two-process deployment: an ONNX-only API and a PyTorch worker sharing one registry volume.
+#   docker compose run --rm init      # once: download ETTh1, train v0001 into the volume
+#   docker compose up api worker      # serve + retrain loop; open http://localhost:8000
+services:
+  init:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    volumes:
+      - registry:/registry
+    command: >
+      sh -c "metronome prepare etth1 &&
+             metronome deploy-init etth1 --registry /registry --threads 2 --max-epochs 10"
+    profiles: ["init"]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      METRONOME_REGISTRY: /registry
+      METRONOME_API_KEY: ${METRONOME_API_KEY:-}
+    volumes:
+      - registry:/registry:ro
+    depends_on: []
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      METRONOME_REGISTRY: /registry
+      METRONOME_API_URL: http://api:8000
+      METRONOME_API_KEY: ${METRONOME_API_KEY:-}
+    volumes:
+      - registry:/registry
+    depends_on:
+      - api
+    command: >
+      sh -c "metronome worker --registry /registry --api-url http://api:8000
+             --api-key \"$${METRONOME_API_KEY}\" --threads 1"
+
+volumes:
+  registry: {}

@@ -1,0 +1,129 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  TORCH_INDEX: https://download.pytorch.org/whl/cpu
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install torch --index-url $TORCH_INDEX && pip install -e ".[train,export,dev]"
+      - run: ruff check src tests scripts
+      - run: ruff format --check src tests scripts
+      - name: mypy (strict modules listed in pyproject)
+        run: mypy src/metronome/data src/metronome/drift src/metronome/cadence src/metronome/serving
+      - name: dashboard JS parses
+        run: node --check src/metronome/static/app.js
+
+  test:
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python-version }}", cache: pip }
+      - run: pip install torch --index-url $TORCH_INDEX && pip install -e ".[train,export,dev]"
+      - run: pytest -q -p no:cacheprovider --junitxml=junit-${{ matrix.python-version }}.xml --cov=metronome --cov-report=term
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: junit-${{ matrix.python-version }}, path: junit-*.xml }
+
+  pipeline-smoke:
+    # Real data, short budget: pinned ETTh1 -> validated Parquet -> 3-day refit cache -> policies ->
+    # registry v0001 -> API -> replay -> retrain job -> worker -> verified v0002 hot swap.
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install torch --index-url $TORCH_INDEX && pip install -e ".[train,export,dev]"
+      - run: metronome prepare etth1
+      - run: metronome cache etth1 --seed 0 --workers 2 --max-epochs 2 --limit-days 3
+      - run: metronome simulate etth1_dlinear_s0 --out-dir artifacts/cadence-smoke
+      - run: metronome deploy-init etth1 --registry registry/etth1 --threads 2 --max-epochs 2
+      - name: serve, replay until a scheduled retrain, let the worker swap the model
+        run: |
+          metronome serve --registry registry/etth1 --port 8000 > serve.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ready && break; sleep 1; done
+          curl -sf http://127.0.0.1:8000/ready
+          curl -sf -X POST http://127.0.0.1:8000/v1/replay/start -H 'content-type: application/json' -d '{"schedule_days": 2}'
+          curl -sf -X POST http://127.0.0.1:8000/v1/replay/step -H 'content-type: application/json' -d '{"steps": 96}' | python -c "import sys,json; d=json.load(sys.stdin); assert d['retrain_requests'], d; print(d['position'])"
+          metronome worker --registry registry/etth1 --api-url http://127.0.0.1:8000 --max-epochs 2 --once
+          curl -sf http://127.0.0.1:8000/ready | tee ready.json
+          python -c "import json; assert json.load(open('ready.json'))['model'] == 'v0002'"
+          curl -sf http://127.0.0.1:8000/v1/events | python -c "import sys,json; e=json.load(sys.stdin); assert e['swaps'][-1]['to']=='v0002', e"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: registry-smoke
+          path: |
+            registry/etth1
+            artifacts/cadence-smoke
+            serve.log
+          if-no-files-found: error
+
+  docker:
+    needs: pipeline-smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: registry-smoke, path: ci-input }
+      - run: docker build -t metronome-serve -f Dockerfile .
+      - name: run the ONNX-only image against the smoke registry, restart it, forecast both times
+        run: |
+          chmod -R a+rX ci-input/registry
+          docker run -d --name api -p 8000:8000 -v "$PWD/ci-input/registry/etth1:/registry:ro" metronome-serve
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ready && break; sleep 1; done
+          curl -sf http://127.0.0.1:8000/ready | tee ready1.json
+          python3 - <<'EOF'
+          import json, urllib.request
+          dep = json.load(urllib.request.urlopen("http://127.0.0.1:8000/v1/deployment"))
+          hist = [[0.0] * len(dep["channels"])] * dep["lookback"]
+          req = urllib.request.Request("http://127.0.0.1:8000/v1/forecast", data=json.dumps({"history": hist}).encode(), headers={"content-type": "application/json"})
+          out = json.load(urllib.request.urlopen(req))
+          assert len(out["forecast"]) == dep["horizon"], out
+          print("forecast ok", out["model_version"], out["latency_ms"])
+          EOF
+          docker restart api
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ready && break; sleep 1; done
+          curl -sf http://127.0.0.1:8000/ready | tee ready2.json
+          python3 -c "import json; a=json.load(open('ready1.json')); b=json.load(open('ready2.json')); assert a['model']==b['model']=='v0002', (a,b)"
+          docker image inspect metronome-serve --format 'image size {{.Size}} bytes'
+      - name: the serving image must not contain torch
+        run: docker run --rm metronome-serve python -c "import importlib.util,sys; sys.exit(1 if importlib.util.find_spec('torch') else 0)"
+
+  numbers:
+    needs: lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: every number quoted in README/docs must match the artifact it cites
+        run: python scripts/check_numbers.py --require-markers README.md docs/results.md docs/reproduction.md docs/serving.md docs/bigdata.md
