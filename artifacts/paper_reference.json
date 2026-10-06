@@ -1,0 +1,23 @@
+{
+  "_note": "Values transcribed by hand from the papers' result tables (multivariate, input length 336 unless stated). Metrics are MSE/MAE on the train-standardized scale. Transcriptions must be checked against the papers before being quoted; see docs/reproduction.md.",
+  "dlinear": {
+    "source": "Zeng, Chen, Zhang, Xu. Are Transformers Effective for Time Series Forecasting? AAAI 2023, Table 2 (DLinear column, L=336).",
+    "etth1": {"96": {"mse": 0.375, "mae": 0.399}, "192": {"mse": 0.405, "mae": 0.416}, "336": {"mse": 0.439, "mae": 0.443}, "720": {"mse": 0.472, "mae": 0.490}},
+    "etth2": {"96": {"mse": 0.289, "mae": 0.353}, "192": {"mse": 0.383, "mae": 0.418}, "336": {"mse": 0.448, "mae": 0.465}, "720": {"mse": 0.605, "mae": 0.551}}
+  },
+  "nlinear": {
+    "source": "Same paper, Table 2 (NLinear column, L=336).",
+    "etth1": {"96": {"mse": 0.374, "mae": 0.394}, "192": {"mse": 0.408, "mae": 0.415}, "336": {"mse": 0.429, "mae": 0.427}, "720": {"mse": 0.440, "mae": 0.453}},
+    "etth2": {"96": {"mse": 0.277, "mae": 0.338}, "192": {"mse": 0.344, "mae": 0.381}, "336": {"mse": 0.357, "mae": 0.400}, "720": {"mse": 0.394, "mae": 0.436}}
+  },
+  "linear": {
+    "source": "Same paper, Table 2 (Linear column, L=336).",
+    "etth1": {"96": {"mse": 0.375, "mae": 0.397}},
+    "etth2": {"96": {"mse": 0.288, "mae": 0.352}}
+  },
+  "patchtst42": {
+    "source": "Nie, Nguyen, Sinthong, Kalagnanam. A Time Series is Worth 64 Words. ICLR 2023, Table 3 (PatchTST/42 column, L=336).",
+    "etth1": {"96": {"mse": 0.375, "mae": 0.399}, "192": {"mse": 0.414, "mae": 0.421}, "336": {"mse": 0.431, "mae": 0.436}, "720": {"mse": 0.449, "mae": 0.466}},
+    "etth2": {"96": {"mse": 0.274, "mae": 0.336}, "192": {"mse": 0.339, "mae": 0.379}, "336": {"mse": 0.331, "mae": 0.380}, "720": {"mse": 0.379, "mae": 0.422}}
+  }
+}

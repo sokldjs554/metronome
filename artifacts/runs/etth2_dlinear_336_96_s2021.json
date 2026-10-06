@@ -1,0 +1,114 @@
+{
+  "config": {
+    "dataset": "etth2",
+    "kind": "etth",
+    "model": "dlinear",
+    "lookback": 336,
+    "horizon": 96,
+    "seed": 2021,
+    "train": {
+      "lr": 0.005,
+      "batch_size": 32,
+      "max_epochs": 20,
+      "patience": 3,
+      "lr_schedule": "halving",
+      "pct_start": 0.3,
+      "loss": "mse",
+      "threads": 1,
+      "eval_batch_size": 1024,
+      "grad_clip": null
+    },
+    "model_kwargs": {},
+    "tag": ""
+  },
+  "dataset_content_sha256": "31ba826b128186e45db8fd25f70dd691333aa2b59d7988acef7ce2d24026f2b5",
+  "channels": [
+    "HUFL",
+    "HULL",
+    "MUFL",
+    "MULL",
+    "LUFL",
+    "LULL",
+    "OT"
+  ],
+  "borders": {
+    "start": [
+      0,
+      8304,
+      11184
+    ],
+    "end": [
+      8640,
+      11520,
+      14400
+    ]
+  },
+  "n_windows": {
+    "train": 8209,
+    "val": 2785,
+    "test": 2785
+  },
+  "metrics": {
+    "mse": 0.2891541123390198,
+    "mae": 0.3494289517402649,
+    "per_horizon_mse_at": {
+      "1": 0.07102171331644058,
+      "24": 0.22432070970535278,
+      "48": 0.30482757091522217,
+      "96": 0.4088520407676697
+    }
+  },
+  "fit": {
+    "epochs": 6,
+    "best_epoch": 3,
+    "best_val": 0.21075550640934887,
+    "seconds": 6.689518287999817,
+    "stopped_early": true,
+    "history": [
+      {
+        "epoch": 1,
+        "train": 0.4641999733703612,
+        "val": 0.27961395303693665,
+        "lr": 0.005
+      },
+      {
+        "epoch": 2,
+        "train": 0.41675171176558623,
+        "val": 0.31567262391855727,
+        "lr": 0.0025
+      },
+      {
+        "epoch": 3,
+        "train": 0.40103744466312913,
+        "val": 0.21075550640934887,
+        "lr": 0.00125
+      },
+      {
+        "epoch": 4,
+        "train": 0.38990670801995225,
+        "val": 0.2598360520290943,
+        "lr": 0.000625
+      },
+      {
+        "epoch": 5,
+        "train": 0.3857517305310947,
+        "val": 0.22985866298260338,
+        "lr": 0.0003125
+      },
+      {
+        "epoch": 6,
+        "train": 0.38311460191257574,
+        "val": 0.21851328478681334,
+        "lr": 0.00015625
+      }
+    ]
+  },
+  "inference_seconds": 0.1662635190000401,
+  "n_parameters": 64704,
+  "state_sha256": "60c45cc2f6262446a32c37d973c2027cc5749f42ad03e12893a211a038c6be9a",
+  "env": {
+    "torch": "2.14.1+cu130",
+    "python": "3.13.16",
+    "threads": 1
+  }
+}

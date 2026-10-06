@@ -1,0 +1,33 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+junit*.xml
+
+# data: raw and prepared files are reproducible from pinned sources (metronome prepare)
+data/raw/
+data/processed/
+
+# heavy experiment outputs; summaries live in artifacts/*.json and docs/
+artifacts/cache/*.npz
+artifacts/runs/*.pt
+artifacts/logs/
+artifacts/optimization/*/
+artifacts/bigdata/parquet/
+artifacts/demo/*.webm
+
+# serving state
+registry/
+mlruns/
+mlartifacts/
+.dvc/cache/
+.dvc/tmp/
+*.log
+.env

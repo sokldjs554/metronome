@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metronome — 재학습 박자</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">◔</span>
+    <div>
+      <h1>Metronome</h1>
+      <p class="tagline">배포된 시계열 예측 모델을 <strong>언제 다시 학습할지</strong> 데이터로 정하는 non-stop 파이프라인</p>
+    </div>
+  </div>
+  <div class="chips" id="status-chips">
+    <span class="chip" id="chip-ready">연결 중…</span>
+    <span class="chip" id="chip-version">—</span>
+    <span class="chip muted" id="chip-stream">리플레이 꺼짐</span>
+  </div>
+</header>
+
+<p class="notice" id="notice">공개 데이터(ETT 등)를 시간순으로 재생하는 체험입니다. 실제 설비·고객 데이터가 아니며, 재학습은 별도 worker 프로세스가 수행하고 API 는 검증을 통과한 모델만 교체합니다.</p>
+
+<main class="grid">
+  <section class="card" id="card-model">
+    <h2>01 · 지금 서비스 중인 모델</h2>
+    <dl class="kv" id="model-kv"><dt>버전</dt><dd>—</dd></dl>
+    <h3>교체 이력</h3>
+    <ol class="events" id="swap-events"><li class="muted">아직 교체가 없습니다.</li></ol>
+  </section>
+
+  <section class="card" id="card-monitor">
+    <h2>02 · 오차 감시</h2>
+    <div class="gauge-row">
+      <div class="stat"><span class="label">최근 7일 MAE</span><span class="value" id="stat-rolling">—</span></div>
+      <div class="stat"><span class="label">배포 시 검증 MAE</span><span class="value" id="stat-baseline">—</span></div>
+      <div class="stat"><span class="label">해결된 예측</span><span class="value" id="stat-resolved">—</span></div>
+      <div class="stat"><span class="label">대기 중 재학습</span><span class="value" id="stat-jobs">—</span></div>
+    </div>
+    <table class="detectors" id="detectors"><thead><tr><th>검출기</th><th>통계량</th><th>임계값</th><th>상태</th></tr></thead><tbody></tbody></table>
+    <figure>
+      <svg id="chart-daily" viewBox="0 0 640 240" role="img" aria-label="일별 MAE 추이"></svg>
+      <figcaption>일별 MAE(초기 학습 구간 표준편차 단위). 색은 그날 예측한 모델 버전, ▲는 검출기 경보.</figcaption>
+    </figure>
+  </section>
+
+  <section class="card" id="card-replay">
+    <h2>03 · 스트림 재생</h2>
+    <p class="muted">기록된 데이터를 시간순으로 흘려보냅니다. 매 시각 예측 → 실제값 도착 → 오차 해결 → 검출기 판단 → (필요 시) 재학습 요청 → worker 가 새 버전 등록 → 무중단 교체.</p>
+    <div class="controls">
+      <label>주기 재학습(일) <input id="schedule-days" type="number" min="0" value="0" title="0 = 검출기만 사용"></label>
+      <button id="btn-start">리플레이 시작</button>
+      <button id="btn-step1" disabled>+1일</button>
+      <button id="btn-step7" disabled>+7일</button>
+      <button id="btn-step30" disabled>+30일</button>
+      <button id="btn-auto" disabled>자동 재생</button>
+    </div>
+    <div class="progress"><div id="progress-bar"></div></div>
+    <p class="muted" id="replay-pos">리플레이가 시작되지 않았습니다.</p>
+    <ol class="events" id="retrain-events"><li class="muted">재학습 요청이 없습니다.</li></ol>
+  </section>
+
+  <section class="card wide" id="card-evidence">
+    <h2>04 · 재학습 정책 실험 (오프라인, 사전 등록 프로토콜)</h2>
+    <p class="muted" id="evidence-note">artifacts/cadence 의 결과를 요약합니다. 수치는 저장소의 JSON 과 CI 의 숫자 검사로 대조됩니다.</p>
+    <div class="pareto-grid" id="pareto-grid"></div>
+    <table class="results" id="results-table"><thead><tr><th>데이터셋</th><th>never</th><th>periodic-7</th><th>periodic-1</th><th>대표 감시 정책</th><th>재학습 횟수</th></tr></thead><tbody></tbody></table>
+  </section>
+</main>
+
+<footer class="foot">
+  <a href="/docs">OpenAPI</a> · <a href="/metrics">Prometheus</a> · <a href="/v1/monitor">monitor JSON</a> · <span id="foot-version"></span>
+</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>
