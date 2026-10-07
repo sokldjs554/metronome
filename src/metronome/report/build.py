@@ -11,6 +11,7 @@ import json
 import re
 import statistics
 from collections import defaultdict
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
@@ -34,12 +35,18 @@ def _is_gated(policy: str) -> bool:
     return policy.endswith("+gate")
 
 
-def summarize_cadence(cadence_dir: Path) -> dict[str, Any]:
+PREREGISTERED_SEEDS = (0, 1, 2)  # docs/protocol.md P4: the headline and H1-H4 use exactly these
+
+
+def summarize_cadence(cadence_dir: Path, seeds: Collection[int] | None = None) -> dict[str, Any]:
+    """Aggregate the per-seed policy results. `seeds` restricts which seeds count; None = every seed found."""
     groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for path in sorted(cadence_dir.glob("*.json")):
         data = json.loads(path.read_text())
         m = CACHE_RE.match(data["cache"])
         if not m:
+            continue
+        if seeds is not None and int(data["seed"]) not in seeds:
             continue
         variant = m.group("variant") or "expanding"
         groups[(m.group("dataset"), m.group("model"), variant)].append(data)
@@ -50,6 +57,13 @@ def summarize_cadence(cadence_dir: Path) -> dict[str, Any]:
         policies: dict[str, Any] = {}
         for policy in policies_present:
             rows = [s["policies"][policy] for s in seeds if policy in s["policies"]]
+            improvement_by_seed = {
+                str(s["seed"]): (s["policies"]["never"]["mae"] - s["policies"][policy]["mae"])
+                / s["policies"]["never"]["mae"]
+                * 100
+                for s in seeds
+                if policy in s["policies"]
+            }
             by_seed = {
                 str(s["seed"]): {
                     "mae": s["policies"][policy]["mae"],
@@ -100,6 +114,10 @@ def summarize_cadence(cadence_dir: Path) -> dict[str, Any]:
                 "ci_vs_never": _ci(comp_never),
                 "ci_vs_daily": _ci(comp_daily),
                 "by_seed": by_seed,
+                "improvement_by_seed": improvement_by_seed,
+                "n_seeds_better_than_never": sum(v > 0 for v in improvement_by_seed.values()),
+                "improvement_vs_never_pct_min": min(improvement_by_seed.values()),
+                "improvement_vs_never_pct_max": max(improvement_by_seed.values()),
             }
         datasets.setdefault(dataset, {})[variant] = {
             "model": model,
@@ -376,10 +394,23 @@ def write_evidence(summary: dict[str, Any], path: Path) -> Path:
 
 def build_all(root: Path) -> dict[str, Any]:
     cadence_dir = root / "artifacts" / "cadence"
-    summary = summarize_cadence(cadence_dir) if cadence_dir.exists() else {"datasets": {}, "hypotheses": {}}
+    summary = (
+        summarize_cadence(cadence_dir, PREREGISTERED_SEEDS)
+        if cadence_dir.exists()
+        else {"datasets": {}, "hypotheses": {}}
+    )
     (root / "artifacts" / "cadence_summary.json").write_text(
         json.dumps(summary, indent=1, ensure_ascii=False)
     )
+    extended_path = root / "artifacts" / "cadence_summary_extended.json"
+    if cadence_dir.exists():  # post-hoc robustness extension: every seed found, reported next to the headline
+        extended = summarize_cadence(cadence_dir)
+        if any(
+            set(v["expanding"]["seeds"]) - set(PREREGISTERED_SEEDS) for v in extended["datasets"].values()
+        ):
+            extended_path.write_text(json.dumps(extended, indent=1, ensure_ascii=False))
+        elif extended_path.exists():
+            extended_path.unlink()
     ltsf = summarize_ltsf(root / "artifacts" / "runs", root / "artifacts" / "paper_reference.json")
     (root / "artifacts" / "ltsf_summary.json").write_text(json.dumps(ltsf, indent=1, ensure_ascii=False))
     charts = (

@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from metronome.report.build import build_all, judge_hypotheses, summarize_cadence, summarize_ltsf
+from metronome.report.build import (
+    PREREGISTERED_SEEDS,
+    build_all,
+    judge_hypotheses,
+    summarize_cadence,
+    summarize_ltsf,
+)
 from metronome.report.svg import Point, Series, line_chart, pareto_chart
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -257,3 +263,36 @@ def test_h3_h4_compare_matched_seeds_only(tmp_path: Path) -> None:
     assert h3["mae_change_pct_by_seed"] == {"0": pytest.approx(0.5)}
     h4 = h["H4"]["rows"]["etth1"]
     assert h4["seeds"] == [0] and h4["mae_expanding"] == pytest.approx(0.55) and h4["pass"]
+
+
+def test_extended_seeds_are_reported_next_to_the_preregistered_headline(tmp_path: Path) -> None:
+    """Extra seeds must never leak into the pre-registered headline or its H1-H4 verdicts, and the
+    extended summary must expose how many seeds each policy beat `never` on."""
+    (tmp_path / "artifacts" / "runs").mkdir(parents=True)
+    cad = tmp_path / "artifacts" / "cadence"
+    cad.mkdir(parents=True)
+    # seeds 0-2: daily retraining helps; extra seed 3: it hurts (a result the extension must show)
+    for seed, never, daily in ((0, 0.50, 0.40), (1, 0.50, 0.40), (2, 0.50, 0.40), (3, 0.40, 0.41)):
+        _fake_cadence(
+            cad / f"etth1_dlinear_s{seed}.json", f"etth1_dlinear_s{seed}", seed, never, daily, 0.42, 20
+        )
+    head = summarize_cadence(cad, PREREGISTERED_SEEDS)
+    ext = summarize_cadence(cad)
+    assert head["datasets"]["etth1"]["expanding"]["seeds"] == [0, 1, 2]
+    assert ext["datasets"]["etth1"]["expanding"]["seeds"] == [0, 1, 2, 3]
+    h = head["datasets"]["etth1"]["expanding"]["policies"]["periodic-1"]
+    e = ext["datasets"]["etth1"]["expanding"]["policies"]["periodic-1"]
+    assert h["n_seeds"] == 3 and h["n_seeds_better_than_never"] == 3
+    assert e["n_seeds"] == 4 and e["n_seeds_better_than_never"] == 3
+    assert e["improvement_by_seed"]["3"] == pytest.approx(-2.5)  # (0.40 - 0.41) / 0.40 * 100
+    assert e["improvement_vs_never_pct_min"] == pytest.approx(-2.5)
+    assert e["improvement_vs_never_pct_max"] == pytest.approx(20.0)
+    build_all(tmp_path)
+    headline = json.loads((tmp_path / "artifacts" / "cadence_summary.json").read_text())
+    assert headline["datasets"]["etth1"]["expanding"]["seeds"] == [0, 1, 2]
+    extended = json.loads((tmp_path / "artifacts" / "cadence_summary_extended.json").read_text())
+    assert extended["datasets"]["etth1"]["expanding"]["seeds"] == [0, 1, 2, 3]
+    # without extra seeds there is no extended file (a stale one is removed)
+    (cad / "etth1_dlinear_s3.json").unlink()
+    build_all(tmp_path)
+    assert not (tmp_path / "artifacts" / "cadence_summary_extended.json").exists()
