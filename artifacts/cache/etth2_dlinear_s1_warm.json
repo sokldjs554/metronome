@@ -1,0 +1,28 @@
+{
+ "config": {
+  "dataset": "etth2",
+  "seed": 1,
+  "model": "dlinear",
+  "lookback": 336,
+  "horizon": 96,
+  "val_days": 14,
+  "window": "expanding",
+  "stream_days": 365,
+  "train": {
+   "lr": 0.005,
+   "batch_size": 32,
+   "max_epochs": 10,
+   "patience": 3,
+   "lr_schedule": "halving",
+   "pct_start": 0.3,
+   "loss": "mse",
+   "threads": 1,
+   "eval_batch_size": 1024,
+   "grad_clip": null
+  },
+  "model_kwargs": {}
+ },
+ "epochs": 2,
+ "lr": 0.001,
+ "wall_seconds": 2114.6294088819996
+}

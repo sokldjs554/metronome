@@ -54,6 +54,7 @@ def summarize_cadence(cadence_dir: Path) -> dict[str, Any]:
                 str(s["seed"]): {
                     "mae": s["policies"][policy]["mae"],
                     "train_seconds": s["policies"][policy]["train_seconds"],
+                    "train_epochs": s["policies"][policy].get("train_epochs", 0.0),
                 }
                 for s in seeds
                 if policy in s["policies"]
@@ -199,6 +200,7 @@ def judge_hypotheses(summary: dict[str, Any]) -> dict[str, Any]:
         if "warm-1" in pol and "periodic-1" in pol:
             seeds, mae_w, mae_c = _paired(pol["warm-1"], pol["periodic-1"], "mae")
             _, sec_w, sec_c = _paired(pol["warm-1"], pol["periodic-1"], "train_seconds")
+            _, ep_w, ep_c = _paired(pol["warm-1"], pol["periodic-1"], "train_epochs")
             if not seeds:
                 continue
             h3_rows[name] = {
@@ -209,7 +211,21 @@ def judge_hypotheses(summary: dict[str, Any]) -> dict[str, Any]:
                 "seconds_warm": sec_w,
                 "seconds_cold": sec_c,
                 "seconds_ratio": sec_w / sec_c if sec_c > 0 else float("nan"),
+                "epochs_warm": ep_w,
+                "epochs_cold": ep_c,
+                "epochs_ratio": ep_w / ep_c if ep_c > 0 else float("nan"),
+                "seconds_ratio_by_seed": {
+                    k: pol["warm-1"]["by_seed"][k]["train_seconds"]
+                    / pol["periodic-1"]["by_seed"][k]["train_seconds"]
+                    for k in seeds
+                },
                 "mae_change_pct": (mae_w - mae_c) / mae_c * 100,
+                "mae_change_pct_by_seed": {
+                    k: (pol["warm-1"]["by_seed"][k]["mae"] - pol["periodic-1"]["by_seed"][k]["mae"])
+                    / pol["periodic-1"]["by_seed"][k]["mae"]
+                    * 100
+                    for k in seeds
+                },
                 "pass": mae_w <= mae_c * 1.01 and sec_w <= sec_c / 3,
             }
     out["H3"] = {"rows": h3_rows, "pass": bool(h3_rows) and all(r["pass"] for r in h3_rows.values())}

@@ -33,6 +33,7 @@ def _fake_cadence(
             "mse": daily**2,
             "n_refits": days - 1,
             "train_seconds": 100.0,
+            "train_epochs": 8.0 * (days - 1),
             "refit_days": list(range(1, days)),
             "daily_mae": [daily] * days,
         },
@@ -60,6 +61,7 @@ def _fake_cadence(
             "mse": 0.1,
             "n_refits": days - 1,
             "train_seconds": 20.0,
+            "train_epochs": 2.0 * (days - 1),
             "refit_days": list(range(1, days)),
             "daily_mae": [daily] * days,
         },
@@ -250,5 +252,8 @@ def test_h3_h4_compare_matched_seeds_only(tmp_path: Path) -> None:
     h3 = h["H3"]["rows"]["etth1"]
     assert h3["seeds"] == [0] and h3["mae_cold"] == pytest.approx(0.50)  # not the 3-seed mean 0.367
     assert h3["mae_warm"] == pytest.approx(0.50 * 1.005) and h3["pass"]
+    assert h3["epochs_ratio"] == pytest.approx(0.25)  # load-independent cost: 2 vs 8 epochs per refit
+    assert h3["seconds_ratio_by_seed"] == {"0": pytest.approx(0.2)}
+    assert h3["mae_change_pct_by_seed"] == {"0": pytest.approx(0.5)}
     h4 = h["H4"]["rows"]["etth1"]
     assert h4["seeds"] == [0] and h4["mae_expanding"] == pytest.approx(0.55) and h4["pass"]

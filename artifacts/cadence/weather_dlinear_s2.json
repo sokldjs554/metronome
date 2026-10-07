@@ -192,7 +192,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 0.0
   },
   "periodic-1": {
    "policy": "periodic-1",
@@ -564,7 +565,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 1379.0
   },
   "periodic-1+gate": {
    "policy": "periodic-1+gate",
@@ -937,7 +939,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 1379.0
   },
   "periodic-3": {
    "policy": "periodic-3",
@@ -1189,7 +1192,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 458.0
   },
   "periodic-3+gate": {
    "policy": "periodic-3+gate",
@@ -1442,7 +1446,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 458.0
   },
   "periodic-7": {
    "policy": "periodic-7",
@@ -1660,7 +1665,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 182.0
   },
   "periodic-7+gate": {
    "policy": "periodic-7+gate",
@@ -1879,7 +1885,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 182.0
   },
   "periodic-14": {
    "policy": "periodic-14",
@@ -2084,7 +2091,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 81.0
   },
   "periodic-14+gate": {
    "policy": "periodic-14+gate",
@@ -2290,7 +2298,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 81.0
   },
   "periodic-30": {
    "policy": "periodic-30",
@@ -2488,7 +2497,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 34.0
   },
   "periodic-30+gate": {
    "policy": "periodic-30+gate",
@@ -2687,7 +2697,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 34.0
   },
   "periodic-60": {
    "policy": "periodic-60",
@@ -2882,7 +2893,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 14.0
   },
   "periodic-60+gate": {
    "policy": "periodic-60+gate",
@@ -3077,7 +3089,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 14.0
   },
   "periodic-90": {
    "policy": "periodic-90",
@@ -3271,7 +3284,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 5.0
   },
   "periodic-90+gate": {
    "policy": "periodic-90+gate",
@@ -3465,7 +3479,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 5.0
   },
   "ratio-0.1": {
    "policy": "ratio-0.1",
@@ -3661,7 +3676,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 27.0
   },
   "ratio-0.1+gate": {
    "policy": "ratio-0.1+gate",
@@ -3859,7 +3875,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 37.0
   },
   "ratio-0.2": {
    "policy": "ratio-0.2",
@@ -4054,7 +4071,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 20.0
   },
   "ratio-0.2+gate": {
    "policy": "ratio-0.2+gate",
@@ -4249,7 +4267,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 20.0
   },
   "ratio-0.3": {
    "policy": "ratio-0.3",
@@ -4443,7 +4462,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 9.0
   },
   "ratio-0.3+gate": {
    "policy": "ratio-0.3+gate",
@@ -4637,7 +4657,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 9.0
   },
   "ratio-0.5": {
    "policy": "ratio-0.5",
@@ -4829,7 +4850,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 0.0
   },
   "ratio-0.5+gate": {
    "policy": "ratio-0.5+gate",
@@ -5021,7 +5043,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 0.0
   },
   "ph-0.05": {
    "policy": "ph-0.05",
@@ -5225,7 +5248,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 82.0
   },
   "ph-0.05+gate": {
    "policy": "ph-0.05+gate",
@@ -5433,7 +5457,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 109.0
   },
   "ph-0.1": {
    "policy": "ph-0.1",
@@ -5633,7 +5658,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 49.0
   },
   "ph-0.1+gate": {
    "policy": "ph-0.1+gate",
@@ -5835,7 +5861,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 60.0
   },
   "ph-0.2": {
    "policy": "ph-0.2",
@@ -6034,7 +6061,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 50.0
   },
   "ph-0.2+gate": {
    "policy": "ph-0.2+gate",
@@ -6235,7 +6263,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 60.0
   },
   "ph-0.4": {
    "policy": "ph-0.4",
@@ -6432,7 +6461,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 32.0
   },
   "ph-0.4+gate": {
    "policy": "ph-0.4+gate",
@@ -6629,7 +6659,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 32.0
   },
   "adwin-0.3": {
    "policy": "adwin-0.3",
@@ -6823,7 +6854,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 6.0
   },
   "adwin-0.3+gate": {
    "policy": "adwin-0.3+gate",
@@ -7017,7 +7049,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 6.0
   },
   "adwin-0.1": {
    "policy": "adwin-0.1",
@@ -7211,7 +7244,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 10.0
   },
   "adwin-0.1+gate": {
    "policy": "adwin-0.1+gate",
@@ -7405,7 +7439,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 10.0
   },
   "adwin-0.01": {
    "policy": "adwin-0.01",
@@ -7597,7 +7632,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 0.0
   },
   "adwin-0.01+gate": {
    "policy": "adwin-0.01+gate",
@@ -7789,7 +7825,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 0.0
   },
   "adwin-0.001": {
    "policy": "adwin-0.001",
@@ -7981,7 +8018,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 0.0
   },
   "adwin-0.001+gate": {
    "policy": "adwin-0.001+gate",
@@ -8173,7 +8211,8 @@
     NaN,
     NaN,
     NaN
-   ]
+   ],
+   "train_epochs": 0.0
   }
  },
  "comparisons": [

@@ -34,6 +34,7 @@ class Cache:
     val_mae_fixed: np.ndarray  # (M,)
     horizon: int
     config: dict[str, Any]
+    epochs: np.ndarray | None = None  # (M,) epochs actually trained per cold refit
 
     @property
     def n_days(self) -> int:
@@ -67,6 +68,7 @@ class Cache:
             val_mae_fixed=z["val_mae_fixed"],
             horizon=int(meta["config"]["horizon"]),
             config=meta["config"],
+            epochs=z["epochs"].astype(np.float64) if "epochs" in z.files else None,
         )
 
 
@@ -82,6 +84,9 @@ class PolicyResult:
     rejected_days: list[int]
     active: list[int]
     daily_mae: list[float]
+    train_epochs: float = (
+        0.0  # epochs summed over trained models; unlike seconds, independent of machine load
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -193,6 +198,9 @@ def evaluate_schedule(
         rejected_days=list(rejected_days),
         active=active.tolist(),
         daily_mae=daily.tolist(),
+        train_epochs=float(np.nansum(cache.epochs[trained]))
+        if (cache.epochs is not None and trained)
+        else 0.0,
     )
 
 
@@ -243,6 +251,8 @@ def evaluate_warm_chain(cache: Cache, cache_dir: Path) -> PolicyResult | None:
         return None
     z = np.load(path)
     abs_next, sq_next, count, seconds = z["abs_next"], z["sq_next"], z["count"], z["train_seconds"]
+    meta_path = cache_dir / f"{cache.name}_warm.json"
+    warm_epochs = int(json.loads(meta_path.read_text()).get("epochs", 0)) if meta_path.exists() else 0
     denom = count * cache.horizon * cache.n_channels
     total = denom.sum()
     with np.errstate(invalid="ignore", divide="ignore"):
@@ -259,6 +269,7 @@ def evaluate_warm_chain(cache: Cache, cache_dir: Path) -> PolicyResult | None:
         rejected_days=[],
         active=list(range(n)),
         daily_mae=daily.tolist(),
+        train_epochs=float(warm_epochs * (n - 1)),
     )
 
 
