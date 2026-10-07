@@ -55,6 +55,15 @@ def summarize_cadence(cadence_dir: Path, seeds: Collection[int] | None = None) -
     for (dataset, model, variant), seeds in sorted(groups.items()):
         policies_present = sorted({p for s in seeds for p in s["policies"]}, key=_policy_sort_key)
         policies: dict[str, Any] = {}
+        daily_vs_never = _ci(
+            [
+                c
+                for s in seeds
+                for c in s["comparisons"]
+                if c["policy"] == "periodic-1" and c["reference"] == "never"
+            ]
+        )
+        daily_gain_established = bool(daily_vs_never and daily_vs_never["hi_mean"] < 0)
         for policy in policies_present:
             rows = [s["policies"][policy] for s in seeds if policy in s["policies"]]
             improvement_by_seed = {
@@ -88,10 +97,14 @@ def summarize_cadence(cadence_dir: Path, seeds: Collection[int] | None = None) -
                 for c in s["comparisons"]
                 if c["policy"] == policy and c["reference"] == "periodic-1"
             ]
-            gain = [
-                (n - m_) / (n - d) if (n - d) > 0 else float("nan")
-                for n, d, m_ in zip(never, daily, maes, strict=True)
-            ]
+            # Share of the never -> periodic-1 gain a policy keeps (protocol P9/H2), from the seed-mean MAEs.
+            # A mean of per-seed ratios explodes when one seed's daily gain is ~0 (ETTh1: -228, 388), and a
+            # share of a gain that is not distinguishable from zero means nothing, so it is undefined there.
+            gain_fraction = (
+                (_mean(never) - _mean(maes)) / (_mean(never) - _mean(daily))
+                if daily_gain_established and _mean(never) > _mean(daily)
+                else None
+            )
             policies[policy] = {
                 "kind": _policy_kind(policy),
                 "gated": _is_gated(policy),
@@ -108,9 +121,7 @@ def summarize_cadence(cadence_dir: Path, seeds: Collection[int] | None = None) -
                 "improvement_vs_never_pct": _mean(
                     [(n - m_) / n * 100 for n, m_ in zip(never, maes, strict=True)]
                 ),
-                "gain_fraction_of_daily": _mean([g for g in gain if g == g])
-                if any(g == g for g in gain)
-                else None,
+                "gain_fraction_of_daily": gain_fraction,
                 "ci_vs_never": _ci(comp_never),
                 "ci_vs_daily": _ci(comp_daily),
                 "by_seed": by_seed,
@@ -118,6 +129,7 @@ def summarize_cadence(cadence_dir: Path, seeds: Collection[int] | None = None) -
                 "n_seeds_better_than_never": sum(v > 0 for v in improvement_by_seed.values()),
                 "improvement_vs_never_pct_min": min(improvement_by_seed.values()),
                 "improvement_vs_never_pct_max": max(improvement_by_seed.values()),
+                "improvement_vs_never_pct_median": statistics.median(improvement_by_seed.values()),
             }
         datasets.setdefault(dataset, {})[variant] = {
             "model": model,

@@ -287,6 +287,7 @@ def test_extended_seeds_are_reported_next_to_the_preregistered_headline(tmp_path
     assert e["improvement_by_seed"]["3"] == pytest.approx(-2.5)  # (0.40 - 0.41) / 0.40 * 100
     assert e["improvement_vs_never_pct_min"] == pytest.approx(-2.5)
     assert e["improvement_vs_never_pct_max"] == pytest.approx(20.0)
+    assert e["improvement_vs_never_pct_median"] == pytest.approx(20.0)  # sorted: -2.5, 20, 20, 20
     build_all(tmp_path)
     headline = json.loads((tmp_path / "artifacts" / "cadence_summary.json").read_text())
     assert headline["datasets"]["etth1"]["expanding"]["seeds"] == [0, 1, 2]
@@ -296,3 +297,21 @@ def test_extended_seeds_are_reported_next_to_the_preregistered_headline(tmp_path
     (cad / "etth1_dlinear_s3.json").unlink()
     build_all(tmp_path)
     assert not (tmp_path / "artifacts" / "cadence_summary_extended.json").exists()
+
+
+def test_gain_fraction_is_a_ratio_of_means_and_needs_an_established_daily_gain(tmp_path: Path) -> None:
+    """A mean of per-seed ratios explodes when one seed's daily gain is ~0; the share must come from the
+    seed-mean MAEs, and it is undefined where daily retraining does not beat never with an interval below 0."""
+    cad = tmp_path / "cadence"
+    cad.mkdir()
+    # seed 0: real daily gain, trigger keeps 80% of it; seed 1: daily gain ~0, trigger is worse than never
+    _fake_cadence(cad / "etth1_dlinear_s0.json", "etth1_dlinear_s0", 0, 0.50, 0.40, 0.42, 20)
+    _fake_cadence(cad / "etth1_dlinear_s1.json", "etth1_dlinear_s1", 1, 0.50, 0.4999, 0.52, 20)
+    pol = summarize_cadence(cad)["datasets"]["etth1"]["expanding"]["policies"]["ratio-0.2"]
+    # per-seed ratios would be 0.8 and -19998 (mean -9998); of means: (0.50 - 0.47) / (0.50 - 0.44995)
+    assert pol["gain_fraction_of_daily"] == pytest.approx(0.03 / 0.05005)
+    # no established daily gain (interval [-0.0001-0.01, ...+0.01] contains 0): the share is undefined
+    _fake_cadence(cad / "weather_dlinear_s0.json", "weather_dlinear_s0", 0, 0.50, 0.499, 0.51, 3)
+    weather = summarize_cadence(cad)["datasets"]["weather"]["expanding"]["policies"]
+    assert weather["ratio-0.2"]["gain_fraction_of_daily"] is None
+    assert judge_hypotheses(summarize_cadence(cad))["H2"]["rows"]["weather"]["policy"] == "—"

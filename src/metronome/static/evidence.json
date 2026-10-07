@@ -807,11 +807,7 @@
      "n_refits": 0.0
     }
    ],
-   "representative": {
-    "policy": "ratio-0.2",
-    "mae": 0.4363837953545516,
-    "n_refits": 2.0
-   }
+   "representative": null
   }
  }
 }

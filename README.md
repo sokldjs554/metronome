@@ -44,7 +44,7 @@ DLinear 를 4개 데이터셋의 마지막 1년(weather 는 180일) 스트림에
 **답은 "데이터에 따라 다르다"이고, 그걸 미리 알 수 있다는 것이 이 프로젝트의 핵심입니다.** ETTh2 는 매일 재학습으로 MAE 가
 <!-- num:artifacts/cadence_summary.json#datasets/etth2/expanding/policies/periodic-1/improvement_vs_never_pct:.1f -->6.8<!-- /num -->% 내려가지만
 weather 와 electricity 는 재학습해도 좋아지지 않습니다(구간이 0 을 포함). 재학습이 통하는 데이터에서는 오차 감시(Page–Hinkley)가
-매일 재학습 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->0.96<!-- /num -->배를
+매일 재학습 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->0.98<!-- /num -->배를
 재학습 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/n_refits:.0f -->19<!-- /num -->회로 얻고,
 **승격 게이트**(후보가 직전 14일의 현역보다 나을 때만 교체)는 이상 구간에서 학습된 나쁜 모델이 서비스에 오르는 것을 막아
 비율 규칙의 손해를 덜어 내지만, 잘 통하는 ETTh2 에서는 중립이거나 조금 손해입니다. 이상 구간에서 울리는 비율 규칙은 ETTh1 에서 오히려 해로웠습니다
@@ -54,6 +54,9 @@ weather 와 electricity 는 재학습해도 좋아지지 않습니다(구간이 
 H2(감시 정책이 적은 재학습으로 이득의 80%): <!-- num:artifacts/cadence_summary.json#hypotheses/H2/pass -->True<!-- /num -->,
 H3(웜 스타트 1/3 비용): <!-- num:artifacts/cadence_summary.json#hypotheses/H3/pass -->False<!-- /num -->,
 H4(확장 창 ≥ 슬라이딩 창): <!-- num:artifacts/cadence_summary.json#hypotheses/H4/pass -->True<!-- /num -->.
+시드를 8개로 늘린 사후 확장도 같은 결론입니다: ETTh2 는 시드 8개 중 <!-- num:artifacts/cadence_summary_extended.json#datasets/etth2/expanding/policies/periodic-1/n_seeds_better_than_never:d -->8<!-- /num -->개에서 매일 재학습이 낫고
+(<!-- num:artifacts/cadence_summary_extended.json#datasets/etth2/expanding/policies/periodic-1/improvement_vs_never_pct:+.2f -->+7.07<!-- /num -->%), ETTh1 의 작은 이득(<!-- num:artifacts/cadence_summary_extended.json#datasets/etth1/expanding/policies/periodic-1/improvement_vs_never_pct:+.2f -->+1.24<!-- /num -->%)은 시드 둘에 몰려 있으며,
+weather 는 <!-- num:artifacts/cadence_summary_extended.json#datasets/weather/expanding/policies/periodic-1/improvement_vs_never_pct:+.2f -->+0.02<!-- /num -->% 로 사실상 0 입니다.
 전체 격자·구간·차트는 [docs/results.md](docs/results.md) 에 있습니다.
 
 ![etth2 재학습 횟수 대 MAE](docs/assets/charts/pareto_etth2.svg)
