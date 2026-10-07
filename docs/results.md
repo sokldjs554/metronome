@@ -129,4 +129,4 @@ metronome report
 python scripts/check_numbers.py --fix docs/results.md README.md
 ```
 
-전체 정책 격자(각 데이터셋 40개 정책 × 시드 3개)의 수치는 `artifacts/cadence/*.json`, 집계는 `artifacts/cadence_summary.json` 에 있습니다.
+전체 정책 격자(데이터셋마다 사전 등록 20개 + 사후 게이트 변형 19개, etth1·etth2 는 웜 스타트 1개 추가; 시드 수는 요약표)의 수치는 `artifacts/cadence/*.json`, 집계는 `artifacts/cadence_summary.json` 에 있습니다.
