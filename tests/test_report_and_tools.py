@@ -226,3 +226,29 @@ def test_mlflow_mirror(tmp_path: Path) -> None:
     uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     assert len(log_ltsf_runs(runs, uri)) == 1
     assert len(log_cadence(cad, uri)) == 6  # 5 policies + parent
+
+
+def test_h3_h4_compare_matched_seeds_only(tmp_path: Path) -> None:
+    """A variant run on fewer seeds must be judged against the same seeds of the reference,
+    not against the reference's average over all seeds."""
+    cad = tmp_path / "cadence"
+    cad.mkdir()
+    # seed 0 is the hard seed (high MAE everywhere); seeds 1, 2 are easy and have no warm/sliding run
+    _fake_cadence(cad / "etth1_dlinear_s0.json", "etth1_dlinear_s0", 0, 0.60, 0.50, 0.52, 20)
+    _fake_cadence(cad / "etth1_dlinear_s0_sliding.json", "etth1_dlinear_s0_sliding", 0, 0.62, 0.52, 0.54, 20)
+    for seed in (1, 2):
+        path = cad / f"etth1_dlinear_s{seed}.json"
+        _fake_cadence(path, f"etth1_dlinear_s{seed}", seed, 0.40, 0.30, 0.32, 20)
+        data = json.loads(path.read_text())
+        del data["policies"]["warm-1"]
+        path.write_text(json.dumps(data))
+    summary = summarize_cadence(cad)
+    pol = summary["datasets"]["etth1"]["expanding"]["policies"]
+    assert pol["periodic-1"]["n_seeds"] == 3 and pol["warm-1"]["n_seeds"] == 1
+    assert set(pol["periodic-1"]["by_seed"]) == {"0", "1", "2"}
+    h = judge_hypotheses(summary)
+    h3 = h["H3"]["rows"]["etth1"]
+    assert h3["seeds"] == [0] and h3["mae_cold"] == pytest.approx(0.50)  # not the 3-seed mean 0.367
+    assert h3["mae_warm"] == pytest.approx(0.50 * 1.005) and h3["pass"]
+    h4 = h["H4"]["rows"]["etth1"]
+    assert h4["seeds"] == [0] and h4["mae_expanding"] == pytest.approx(0.55) and h4["pass"]

@@ -50,6 +50,14 @@ def summarize_cadence(cadence_dir: Path) -> dict[str, Any]:
         policies: dict[str, Any] = {}
         for policy in policies_present:
             rows = [s["policies"][policy] for s in seeds if policy in s["policies"]]
+            by_seed = {
+                str(s["seed"]): {
+                    "mae": s["policies"][policy]["mae"],
+                    "train_seconds": s["policies"][policy]["train_seconds"],
+                }
+                for s in seeds
+                if policy in s["policies"]
+            }
             never = [s["policies"]["never"]["mae"] for s in seeds if policy in s["policies"]]
             daily = [s["policies"]["periodic-1"]["mae"] for s in seeds if policy in s["policies"]]
             maes = [r["mae"] for r in rows]
@@ -90,6 +98,7 @@ def summarize_cadence(cadence_dir: Path) -> dict[str, Any]:
                 else None,
                 "ci_vs_never": _ci(comp_never),
                 "ci_vs_daily": _ci(comp_daily),
+                "by_seed": by_seed,
             }
         datasets.setdefault(dataset, {})[variant] = {
             "model": model,
@@ -122,6 +131,19 @@ def _policy_sort_key(p: str) -> tuple[int, float, int]:
     except ValueError:
         v = 0.0
     return order.get(kind, 9), v, 1 if gate else 0
+
+
+def _paired(a: dict[str, Any], b: dict[str, Any], key: str) -> tuple[list[str], float, float]:
+    """Means of `key` for two policies over the seeds both have, so a variant run on fewer seeds
+    is never compared with an average over more seeds."""
+    common = sorted(set(a["by_seed"]) & set(b["by_seed"]), key=int)
+    if not common:
+        return [], float("nan"), float("nan")
+    return (
+        common,
+        _mean([a["by_seed"][k][key] for k in common]),
+        _mean([b["by_seed"][k][key] for k in common]),
+    )
 
 
 def judge_hypotheses(summary: dict[str, Any]) -> dict[str, Any]:
@@ -175,14 +197,20 @@ def judge_hypotheses(summary: dict[str, Any]) -> dict[str, Any]:
     for name in ("etth1", "etth2"):
         pol = ds.get(name, {}).get("expanding", {}).get("policies", {})
         if "warm-1" in pol and "periodic-1" in pol:
-            w, c = pol["warm-1"], pol["periodic-1"]
+            seeds, mae_w, mae_c = _paired(pol["warm-1"], pol["periodic-1"], "mae")
+            _, sec_w, sec_c = _paired(pol["warm-1"], pol["periodic-1"], "train_seconds")
+            if not seeds:
+                continue
             h3_rows[name] = {
-                "mae_warm": w["mae_mean"],
-                "mae_cold": c["mae_mean"],
-                "seconds_warm": w["train_seconds_mean"],
-                "seconds_cold": c["train_seconds_mean"],
-                "pass": w["mae_mean"] <= c["mae_mean"] * 1.01
-                and w["train_seconds_mean"] <= c["train_seconds_mean"] / 3,
+                "seeds": [int(k) for k in seeds],
+                "n_seeds": len(seeds),
+                "mae_warm": mae_w,
+                "mae_cold": mae_c,
+                "seconds_warm": sec_w,
+                "seconds_cold": sec_c,
+                "seconds_ratio": sec_w / sec_c if sec_c > 0 else float("nan"),
+                "mae_change_pct": (mae_w - mae_c) / mae_c * 100,
+                "pass": mae_w <= mae_c * 1.01 and sec_w <= sec_c / 3,
             }
     out["H3"] = {"rows": h3_rows, "pass": bool(h3_rows) and all(r["pass"] for r in h3_rows.values())}
     # H4: expanding periodic-7 <= sliding periodic-7 (etth1, etth2)
@@ -190,11 +218,18 @@ def judge_hypotheses(summary: dict[str, Any]) -> dict[str, Any]:
     for name in ("etth1", "etth2"):
         v = ds.get(name, {})
         if "expanding" in v and "sliding" in v and "periodic-7" in v["sliding"]["policies"]:
-            e, s = (
-                v["expanding"]["policies"]["periodic-7"]["mae_mean"],
-                v["sliding"]["policies"]["periodic-7"]["mae_mean"],
+            seeds, e, sl = _paired(
+                v["expanding"]["policies"]["periodic-7"], v["sliding"]["policies"]["periodic-7"], "mae"
             )
-            h4_rows[name] = {"mae_expanding": e, "mae_sliding": s, "pass": e <= s}
+            if not seeds:
+                continue
+            h4_rows[name] = {
+                "seeds": [int(k) for k in seeds],
+                "n_seeds": len(seeds),
+                "mae_expanding": e,
+                "mae_sliding": sl,
+                "pass": e <= sl,
+            }
     out["H4"] = {"rows": h4_rows, "pass": bool(h4_rows) and all(r["pass"] for r in h4_rows.values())}
     return out
 
