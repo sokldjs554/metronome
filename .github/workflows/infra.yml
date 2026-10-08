@@ -2,9 +2,10 @@ name: infra
 
 # The Azure deployment as code (infra/azure). Pull requests check formatting and validity without
 # touching Azure. On main and on demand the job logs in with the same keyless identity as the azure
-# workflow, imports the three live resources into the Terraform state if they are not there yet, and
-# runs `terraform plan`: a plan with changes fails the job, because the point of the file is that it
-# matches what is running. `apply` happens only when asked for by hand.
+# workflow, imports the three live resources into a fresh local state and runs `terraform plan`: a plan
+# with changes fails the job, because the point of the file is that it matches what is running.
+# `apply` happens only when asked for by hand. There is no remote state: the identity is scoped to the
+# resource group and cannot register the Storage provider, and three imported resources do not need one.
 on:
   pull_request:
     paths:
@@ -38,7 +39,6 @@ env:
   LOCATION: koreacentral
   ENVIRONMENT: metronome-env
   APP: metronome-demo
-  STATE_CONTAINER: tfstate
 
 defaults:
   run:
@@ -78,36 +78,17 @@ jobs:
           client-id: "${{ secrets.AZURE_CLIENT_ID }}"
           tenant-id: "${{ secrets.AZURE_TENANT_ID }}"
           subscription-id: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
-      - name: state storage (created once, inside the same resource group)
-        id: state
-        run: |
-          sub=$(az account show --query id -o tsv)
-          account="stmetronome$(echo "$sub" | tr -d - | cut -c1-12)"
-          if ! az storage account show -g "$RESOURCE_GROUP" -n "$account" -o none 2>/dev/null; then
-            az storage account create -g "$RESOURCE_GROUP" -n "$account" -l "$LOCATION" --sku Standard_LRS \
-              --kind StorageV2 --allow-blob-public-access false --min-tls-version TLS1_2 -o none
-          fi
-          key=$(az storage account keys list -g "$RESOURCE_GROUP" -n "$account" --query "[0].value" -o tsv)
-          echo "::add-mask::$key"
-          az storage container create --account-name "$account" --account-key "$key" -n "$STATE_CONTAINER" -o none
-          echo "account=$account" >> "$GITHUB_OUTPUT"
-          echo "ARM_ACCESS_KEY=$key" >> "$GITHUB_ENV"
-      - name: terraform init
-        run: |
-          terraform init -reconfigure \
-            -backend-config="resource_group_name=$RESOURCE_GROUP" \
-            -backend-config="storage_account_name=${{ steps.state.outputs.account }}"
-      - name: import the live resources into the state when they are not there yet
+      - run: terraform init
+      - name: import the live resources into a fresh state
         run: |
           sub=$(az account show --query id -o tsv)
           base="/subscriptions/$sub/resourceGroups/$RESOURCE_GROUP"
-          import() { terraform state list 2>/dev/null | grep -qx "$1" || terraform import "${@:3}" "$1" "$2"; }
           law=$(az monitor log-analytics workspace list -g "$RESOURCE_GROUP" --query "[0].name" -o tsv)
           echo "LAW_NAME=$law" >> "$GITHUB_ENV"
           vars=(-var "log_analytics_workspace_name=$law")
-          import azurerm_resource_group.rg "$base" "${vars[@]}"
-          import azurerm_container_app_environment.env "$base/providers/Microsoft.App/managedEnvironments/$ENVIRONMENT" "${vars[@]}"
-          import azurerm_container_app.demo "$base/providers/Microsoft.App/containerApps/$APP" "${vars[@]}"
+          terraform import "${vars[@]}" azurerm_resource_group.rg "$base"
+          terraform import "${vars[@]}" azurerm_container_app_environment.env "$base/providers/Microsoft.App/managedEnvironments/$ENVIRONMENT"
+          terraform import "${vars[@]}" azurerm_container_app.demo "$base/providers/Microsoft.App/containerApps/$APP"
           terraform state list
       - name: terraform plan (drift fails the job)
         id: plan
