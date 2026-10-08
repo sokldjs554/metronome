@@ -1,0 +1,127 @@
+name: azure
+
+# Continuous deployment of the server demo to Azure Container Apps. Every change to the demo on main
+# builds Dockerfile.demo, publishes it to GHCR as metronome-demo:sha-<commit>, logs in to Azure with a
+# federated (keyless) identity, points the container app at that exact image and then runs the same
+# checks as cloud-smoke against the public address. To roll back, run it by hand with the tag of an
+# earlier commit: nothing is rebuilt, the app just switches to that image.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "Dockerfile.demo"
+      - "docs/demo/metronome-replay.html"
+      - ".github/workflows/azure.yml"
+      - ".github/workflows/cloud-smoke.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published metronome-demo tag to deploy instead of building this commit, e.g. sha-<commit> (roll back)"
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: azure-deploy
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/metronome-demo
+  RESOURCE_GROUP: metronome-rg
+  ENVIRONMENT: metronome-env
+  APP: metronome-demo
+
+jobs:
+  publish:
+    if: ${{ !inputs.tag }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: "${{ github.actor }}"
+          password: "${{ secrets.GITHUB_TOKEN }}"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.demo
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: image is publicly pullable
+        # The container app pulls without credentials, so a package that came out private would only
+        # fail later, at the first scale-from-zero.
+        run: |
+          tok=$(curl -sf "https://ghcr.io/token?scope=repository:${{ github.repository_owner }}/metronome-demo:pull" \
+                | python3 -c 'import sys, json; print(json.load(sys.stdin)["token"])')
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $tok" \
+                 -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
+                 "https://ghcr.io/v2/${{ github.repository_owner }}/metronome-demo/manifests/sha-${{ github.sha }}")
+          [ "$code" = "200" ] || { echo "::error::$IMAGE is not publicly pullable (HTTP $code): package settings -> Change visibility -> Public"; exit 1; }
+          echo "published $IMAGE:sha-${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: publish
+    if: ${{ !cancelled() && (needs.publish.result == 'success' || needs.publish.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      url: ${{ steps.app.outputs.url }}
+    env:
+      TAG: ${{ inputs.tag || format('sha-{0}', github.sha) }}
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: "${{ secrets.AZURE_CLIENT_ID }}"
+          tenant-id: "${{ secrets.AZURE_TENANT_ID }}"
+          subscription-id: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+      - name: create or update the container app
+        id: app
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt core.only_show_errors=true -o none
+          az extension add -n containerapp --upgrade -y -o none
+          suffix="run${{ github.run_number }}"
+          if az containerapp show -g "$RESOURCE_GROUP" -n "$APP" -o none 2>/dev/null; then
+            az containerapp update -g "$RESOURCE_GROUP" -n "$APP" --image "$IMAGE:$TAG" --revision-suffix "$suffix" -o none
+          else
+            az containerapp create -g "$RESOURCE_GROUP" -n "$APP" --environment "$ENVIRONMENT" \
+              --image "$IMAGE:$TAG" --target-port 8000 --ingress external \
+              --min-replicas 0 --max-replicas 1 --cpu 1.0 --memory 2.0Gi \
+              --env-vars PORT=8000 --revision-suffix "$suffix" -o none
+          fi
+          fqdn=$(az containerapp show -g "$RESOURCE_GROUP" -n "$APP" --query properties.configuration.ingress.fqdn -o tsv)
+          echo "url=https://$fqdn" >> "$GITHUB_OUTPUT"
+          echo "### $IMAGE:$TAG -> https://$fqdn" >> "$GITHUB_STEP_SUMMARY"
+      - name: the revision taking traffic runs this image
+        # Single-revision mode keeps the previous revision serving until the new one is healthy, so a
+        # broken image would otherwise pass the checks below on the old code.
+        run: |
+          for i in $(seq 1 30); do
+            serving=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$APP" \
+              --query "[?properties.trafficWeight==\`100\` && properties.active].[name, properties.template.containers[0].image, properties.healthState, properties.provisioningState]" -o tsv)
+            echo "attempt $i: ${serving:-no revision with 100% traffic yet}"
+            case "$serving" in *"$IMAGE:$TAG"*Healthy*Provisioned*) exit 0 ;; esac
+            sleep 10
+          done
+          echo "::error::no healthy revision running $IMAGE:$TAG is taking traffic"
+          az containerapp revision list -g "$RESOURCE_GROUP" -n "$APP" -o table
+          exit 1
+
+  smoke:
+    needs: deploy
+    permissions:
+      contents: read
+    uses: ./.github/workflows/cloud-smoke.yml
+    with:
+      url: ${{ needs.deploy.outputs.url }}

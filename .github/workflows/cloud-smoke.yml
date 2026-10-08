@@ -1,8 +1,9 @@
 name: cloud-smoke
 
-# Operates the public Render deployment: every 6 hours (and on demand) wake the free instance, check
-# liveness, readiness, the deployment contract, a real forecast, Prometheus metrics and the browser
-# replay, and write the latencies to the run summary. A failing run notifies the repository owner.
+# Checks a public deployment: wake the instance, then liveness, readiness, the deployment contract, a
+# real forecast, Prometheus metrics and the browser replay, with the latencies in the run summary.
+# Runs every 6 hours against the Render service (a failing run notifies the repository owner), on
+# demand against any URL, and from the azure workflow right after each deployment (workflow_call).
 on:
   schedule:
     - cron: "17 */6 * * *"
@@ -11,6 +12,12 @@ on:
       url:
         description: "Base URL of the deployment (default: repository variable RENDER_URL)"
         required: false
+  workflow_call:
+    inputs:
+      url:
+        description: "Base URL of the deployment to check"
+        required: true
+        type: string
   pull_request:
     paths:
       - ".github/workflows/cloud-smoke.yml"
