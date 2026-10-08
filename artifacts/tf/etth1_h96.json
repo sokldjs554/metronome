@@ -1,0 +1,108 @@
+{
+ "dataset": "etth1",
+ "lookback": 336,
+ "horizon": 96,
+ "seeds": [
+  0,
+  1,
+  2
+ ],
+ "dataset_content_sha256": "ff12d69692f938ac5ce1c71d549f02a80b293b61e83ae53386a4054d7658fc4a",
+ "versions": {
+  "tensorflow": "2.21.0",
+  "torch": "2.14.1+cu130"
+ },
+ "runs": [
+  {
+   "seed": 0,
+   "init_max_abs_diff": 0.0,
+   "torch": {
+    "test_mse": 0.37689194083213806,
+    "test_mae": 0.3997000455856323,
+    "epochs": 8,
+    "best_epoch": 5
+   },
+   "tf_lockstep": {
+    "test_mse": 0.37689441442489624,
+    "test_mae": 0.3997039198875427,
+    "epochs": 8,
+    "best_epoch": 5,
+    "best_val": 0.643551230430603,
+    "seconds": 7.298061857999983
+   },
+   "lockstep_pred_max_abs_diff": 0.015951454639434814,
+   "tf_independent": {
+    "test_mse": 0.3768864572048187,
+    "test_mae": 0.39971399307250977,
+    "epochs": 8,
+    "best_epoch": 5,
+    "best_val": 0.6435883045196533,
+    "seconds": 7.407378429000119
+   }
+  },
+  {
+   "seed": 1,
+   "init_max_abs_diff": 0.0,
+   "torch": {
+    "test_mse": 0.3711942136287689,
+    "test_mae": 0.39278388023376465,
+    "epochs": 12,
+    "best_epoch": 9
+   },
+   "tf_lockstep": {
+    "test_mse": 0.3711942136287689,
+    "test_mae": 0.39278388023376465,
+    "epochs": 12,
+    "best_epoch": 9,
+    "best_val": 0.6493353843688965,
+    "seconds": 10.334613393999916
+   },
+   "lockstep_pred_max_abs_diff": 0.0007680356502532959,
+   "tf_independent": {
+    "test_mse": 0.37120574712753296,
+    "test_mae": 0.3927978277206421,
+    "epochs": 12,
+    "best_epoch": 9,
+    "best_val": 0.6493477821350098,
+    "seconds": 10.09509399500007
+   }
+  },
+  {
+   "seed": 2,
+   "init_max_abs_diff": 0.0,
+   "torch": {
+    "test_mse": 0.3710026144981384,
+    "test_mae": 0.3926256000995636,
+    "epochs": 12,
+    "best_epoch": 9
+   },
+   "tf_lockstep": {
+    "test_mse": 0.37100258469581604,
+    "test_mae": 0.3926255702972412,
+    "epochs": 12,
+    "best_epoch": 9,
+    "best_val": 0.6490566730499268,
+    "seconds": 10.23414781800011
+   },
+   "lockstep_pred_max_abs_diff": 0.0014296472072601318,
+   "tf_independent": {
+    "test_mse": 0.37098756432533264,
+    "test_mae": 0.3925994038581848,
+    "epochs": 12,
+    "best_epoch": 9,
+    "best_val": 0.6490642428398132,
+    "seconds": 10.017478574000052
+   }
+  }
+ ],
+ "summary": {
+  "torch_test_mse_mean": 0.37302958965301514,
+  "tf_lockstep_test_mse_mean": 0.3730304042498271,
+  "tf_independent_test_mse_mean": 0.37302658955256146,
+  "lockstep_mse_rel_diff_pct_max": 0.0006563135185956156,
+  "lockstep_same_best_epoch": true,
+  "independent_vs_torch_pct": -0.0008042526750938961,
+  "init_max_abs_diff_max": 0.0,
+  "p15_pass": true
+ }
+}

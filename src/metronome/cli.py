@@ -307,6 +307,22 @@ def demo(
     uvicorn.run(application, host=host, port=port, log_level="info")
 
 
+@app.command("tf-repro")
+def tf_repro(
+    dataset: str = "etth1",
+    seeds: str = "0,1,2",
+    processed_dir: Path = PROCESSED,
+    out_dir: Path = Path("artifacts/tf"),
+) -> None:
+    """TensorFlow reproduction of DLinear (protocol P15): parity, lockstep training, independent training."""
+    from metronome.tfmodels import run_reproduction
+
+    report = run_reproduction(
+        dataset, seeds=tuple(int(s) for s in seeds.split(",")), processed_dir=processed_dir, out_dir=out_dir
+    )
+    typer.echo(json.dumps(report["summary"], indent=1))
+
+
 @app.command()
 def tune(
     dataset: str,

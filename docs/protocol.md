@@ -143,6 +143,16 @@ DLinear(Zeng et al. 2023)와 PatchTST(Nie et al. 2023)를 **표준 LTSF 프로�
 - H5: etth1·etth2 모두에서 선택한 설정의 시험 MSE 평균이 논문 레시피보다 1% 이상 낮고, 시드 3개 모두에서 낮다.
 - 모든 trial 은 MLflow 에 기록하고, trial 목록과 시험 결과는 `artifacts/tune/` 의 JSON 으로 커밋합니다. 가설이 기각되어도 그대로 보고합니다.
 
+## P15. TensorFlow 재현 (사후 추가, 실행 전에 고정)
+
+같은 DLinear 를 TensorFlow/Keras 로 구현해 프레임워크가 결과를 바꾸지 않는지 봅니다. ETTh1, L=336, H=96, 표준 LTSF 분할, 시드 {0, 1, 2}.
+
+- 동등성: PyTorch 초기 가중치를 Keras 로 옮겼을 때 같은 입력의 출력 차이 최대값 < 1e-5.
+- 함께 학습(lockstep): 같은 초기 가중치, 같은 배치 순서(같은 시드의 numpy 순열), 같은 레시피(Adam ε 1e-8, lr 0.005 를 epoch 마다 반감,
+  배치 32, 최대 20 epoch, patience 3)로 두 프레임워크를 각각 학습해 시험 MSE 의 상대 차이가 시드마다 1% 이내.
+- 독립 학습: Keras 자체 초기화(PyTorch 기본과 같은 균등 분포)로 학습한 시험 MSE 평균이 PyTorch 평균의 ±3% 이내.
+- 세 조건을 모두 만족하면 통과로 보고, 결과는 `artifacts/tf/` 의 JSON 으로 커밋합니다.
+
 ## 변경 이력
 
 - 2026-10-06: 최초 고정.
@@ -181,3 +191,4 @@ DLinear(Zeng et al. 2023)와 PatchTST(Nie et al. 2023)를 **표준 LTSF 프로�
   재학습 정책 결과(H1~H4)와는 독립이며, 탐색 공간·선택 규칙·시험 시드·판정 기준은 탐색을 실행하기 전에 고정했습니다.
 - 2026-10-08 (문서 정정): P10 은 DLinear 레시피가 "P5 와 같다"고 적었지만, 실제 LTSF 실행(`dlinear_recipe`, `artifacts/runs/*dlinear*`)은
   최대 **20** epoch(patience 3)였습니다. 결과는 실행 그대로이며 문서를 실행에 맞춥니다. P5 의 재학습 캐시는 최대 10 epoch 그대로입니다.
+- 2026-10-08 (**사후 추가, 실행 전에 기록**): TensorFlow 재현 P15 를 추가했습니다. 판정 기준은 실행 전에 고정했습니다.
