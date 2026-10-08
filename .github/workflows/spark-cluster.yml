@@ -1,0 +1,70 @@
+name: spark-cluster
+
+# Protocol P16: the M4 Spark job on a standalone cluster (master + 2 workers + driver, one container
+# each, shared volume). Fails if the cluster result differs from Polars or a worker ran less than a
+# quarter of the tasks. Runs when the Spark path changes, and on demand.
+on:
+  pull_request:
+    paths:
+      - src/metronome/bigdata/**
+      - Dockerfile.spark
+      - docker-compose.spark.yml
+      - pyproject.toml
+      - .github/workflows/spark-cluster.yml
+  push:
+    branches: [main]
+    paths:
+      - src/metronome/bigdata/**
+      - Dockerfile.spark
+      - docker-compose.spark.yml
+      - pyproject.toml
+      - .github/workflows/spark-cluster.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spark-cluster-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cluster:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      COMPOSE: docker compose -p metronome-spark -f docker-compose.spark.yml
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the Spark image
+        run: $COMPOSE build
+      - name: Run master, 2 workers and the driver
+        run: $COMPOSE up --abort-on-container-exit --exit-code-from driver
+      - name: Collect the report
+        if: always()
+        run: |
+          $COMPOSE cp driver:/data/out/bigdata_cluster.json bigdata_cluster.json || exit 0
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r = json.load(open("bigdata_cluster.json"))
+          c = r["cluster"]
+          print(f"### Spark cluster: passed={r['passed']} (agree={r['agree']}, distributed={r['distributed']})")
+          print(f"{c['n_cells']:,} cells, {c['n_series']:,} series, {c['seconds']:.0f} s on {r['master']}")
+          print()
+          print("| executor | host | cores | completed tasks | task seconds |")
+          print("|---|---|---:|---:|---:|")
+          for e in r["executors"]:
+              print(f"| {e['id']} | {e['host']} | {e['cores']} | {e['completed_tasks']} | {e['task_seconds']:.0f} |")
+          if "local_same_splits" in r:
+              loc = r["local_same_splits"]
+              print(f"\nSame splits on {loc['master']} in the driver container: {loc['seconds']:.0f} s")
+          EOF
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bigdata-cluster
+          path: bigdata_cluster.json
+          if-no-files-found: warn
+      - name: Tear down
+        if: always()
+        run: $COMPOSE down -v

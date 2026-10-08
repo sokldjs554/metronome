@@ -43,7 +43,7 @@ class EngineResult:
     checksum: float  # sum of per-series means, compared across engines
 
 
-def _m4_files(raw_dir: Path, local_dir: Path | None) -> list[Path]:
+def m4_files(raw_dir: Path, local_dir: Path | None) -> list[Path]:
     return [fetch(f"m4_{part.lower()}_train", raw_dir, local_dir) for part in M4_PARTS]
 
 
@@ -109,51 +109,77 @@ def run_pandas_m4(files: list[Path], out_dir: Path) -> tuple[int, int, float]:
 
 
 # ---- PySpark -------------------------------------------------------------------------------------
-def run_spark_m4(files: list[Path], out_dir: Path, master: str = "local[4]") -> tuple[int, int, float]:
+# Settings of the single-machine run recorded in docs/bigdata.md (P12). The cluster run (cluster.py,
+# P16) starts its own session and reuses `spark_melt` unchanged.
+LOCAL_SPARK_CONF = {
+    "spark.driver.memory": "4g",
+    "spark.sql.shuffle.partitions": "8",
+    "spark.ui.enabled": "false",
+}
+
+
+def spark_session(master: str, conf: dict[str, str], app_name: str = "metronome-bigdata") -> Any:
     from pyspark.sql import SparkSession
+
+    builder = SparkSession.builder.master(master).appName(app_name)
+    for key, value in conf.items():
+        builder = builder.config(key, value)
+    spark = builder.getOrCreate()
+    spark.sparkContext.setLogLevel("ERROR")
+    return spark
+
+
+def spark_melt(spark: Any, files: list[Path], out_dir: Path) -> tuple[int, int, float, list[dict[str, Any]]]:
+    """The M4 job on an existing session. Also returns, per file, how many input splits Spark made."""
     from pyspark.sql import functions as F
 
     if out_dir.exists():
         shutil.rmtree(out_dir)
-    spark = (
-        SparkSession.builder.master(master)
-        .appName("metronome-bigdata")
-        .config("spark.driver.memory", "4g")
-        .config("spark.sql.shuffle.partitions", "8")
-        .config("spark.ui.enabled", "false")
-        .getOrCreate()
-    )
-    spark.sparkContext.setLogLevel("ERROR")
     total_cells, total_series, checksum = 0, 0, 0.0
+    per_file: list[dict[str, Any]] = []
+    for f in files:
+        wide = spark.read.option("header", True).csv(str(f))
+        value_cols = [c for c in wide.columns if c != "V1"]
+        stack_expr = ", ".join(f"'{c}', `{c}`" for c in value_cols)
+        long = (
+            wide.select("V1", F.expr(f"stack({len(value_cols)}, {stack_expr}) as (step, value)"))
+            .where(F.col("value").isNotNull() & (F.col("value") != ""))
+            .select(
+                F.col("V1").alias("series_id"),
+                (F.substring("step", 2, 10).cast("int") - 1).alias("step"),
+                F.col("value").cast("double").alias("value"),
+                F.lit(freq_name(f)).alias("frequency"),
+            )
+        )
+        part_dir = out_dir / f"frequency={freq_name(f)}"
+        long.write.mode("overwrite").option("compression", "zstd").parquet(str(part_dir))
+        stats = (
+            spark.read.parquet(str(part_dir))
+            .groupBy("series_id")
+            .agg(F.count("value").alias("n"), F.mean("value").alias("mean"))
+        )
+        agg = stats.agg(F.sum("n"), F.count("series_id"), F.sum("mean")).collect()[0]
+        total_cells += int(agg[0])
+        total_series += int(agg[1])
+        checksum += float(agg[2])
+        per_file.append(
+            {"file": f.name, "input_partitions": wide.rdd.getNumPartitions(), "n_cells": int(agg[0])}
+        )
+    return total_cells, total_series, checksum, per_file
+
+
+def run_spark_m4(files: list[Path], out_dir: Path, master: str = "local[4]") -> tuple[int, int, float]:
+    spark = spark_session(master, LOCAL_SPARK_CONF)
     try:
-        for f in files:
-            wide = spark.read.option("header", True).csv(str(f))
-            value_cols = [c for c in wide.columns if c != "V1"]
-            stack_expr = ", ".join(f"'{c}', `{c}`" for c in value_cols)
-            long = (
-                wide.select("V1", F.expr(f"stack({len(value_cols)}, {stack_expr}) as (step, value)"))
-                .where(F.col("value").isNotNull() & (F.col("value") != ""))
-                .select(
-                    F.col("V1").alias("series_id"),
-                    (F.substring("step", 2, 10).cast("int") - 1).alias("step"),
-                    F.col("value").cast("double").alias("value"),
-                    F.lit(freq_name(f)).alias("frequency"),
-                )
-            )
-            part_dir = out_dir / f"frequency={freq_name(f)}"
-            long.write.mode("overwrite").option("compression", "zstd").parquet(str(part_dir))
-            stats = (
-                spark.read.parquet(str(part_dir))
-                .groupBy("series_id")
-                .agg(F.count("value").alias("n"), F.mean("value").alias("mean"))
-            )
-            agg = stats.agg(F.sum("n"), F.count("series_id"), F.sum("mean")).collect()[0]
-            total_cells += int(agg[0])
-            total_series += int(agg[1])
-            checksum += float(agg[2])
+        cells, series, checksum, _ = spark_melt(spark, files, out_dir)
     finally:
         spark.stop()
-    return total_cells, total_series, checksum
+    return cells, series, checksum
+
+
+def agrees(a: tuple[int, int, float], b: tuple[int, int, float], rtol: float = 1e-6) -> bool:
+    """Same cell count, same series count, per-series-mean sum within `rtol` (the P12 rule)."""
+    return a[0] == b[0] and a[1] == b[1] and abs(a[2] - b[2]) <= rtol * max(1.0, abs(b[2]))
 
 
 def _dir_bytes(path: Path) -> int:
@@ -168,7 +194,7 @@ def run_stage(
     engines: tuple[str, ...] = ("polars", "pandas", "spark"),
     repeats: int = 3,
 ) -> dict[str, Any]:
-    files = _m4_files(raw_dir, local_dir)
+    files = m4_files(raw_dir, local_dir)
     source_bytes = sum(f.stat().st_size for f in files)
     runners = {"polars": run_polars_m4, "pandas": run_pandas_m4, "spark": run_spark_m4}
     results: list[EngineResult] = []
@@ -189,11 +215,7 @@ def run_stage(
         )
     ref = results[0]
     for r in results[1:]:
-        if (
-            r.n_cells != ref.n_cells
-            or r.n_series != ref.n_series
-            or abs(r.checksum - ref.checksum) > 1e-6 * max(1.0, abs(ref.checksum))
-        ):
+        if not agrees((r.n_cells, r.n_series, r.checksum), (ref.n_cells, ref.n_series, ref.checksum)):
             raise RuntimeError(f"{r.engine} disagrees with {ref.engine}: {asdict(r)} vs {asdict(ref)}")
     report = {
         "source": {

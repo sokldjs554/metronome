@@ -45,3 +45,52 @@ def test_spark_agrees_on_tiny_m4(tmp_path: Path) -> None:
     p = engines.run_polars_m4(files, tmp_path / "polars")
     s = engines.run_spark_m4(files, tmp_path / "spark", master="local[1]")
     assert s[:2] == p[:2] and s[2] == pytest.approx(p[2])
+
+
+def test_agrees_uses_the_p12_rule() -> None:
+    ref = (100, 10, 1_000_000.0)
+    assert engines.agrees((100, 10, 1_000_000.5), ref)
+    assert not engines.agrees((100, 10, 1_000_002.0), ref)
+    assert not engines.agrees((101, 10, 1_000_000.0), ref)
+    assert not engines.agrees((100, 9, 1_000_000.0), ref)
+
+
+def test_alive_workers_drops_dead_ones() -> None:
+    from metronome.bigdata import cluster
+
+    state = {
+        "workers": [
+            {"id": "w1", "host": "spark-worker-1", "cores": 2, "memory": 3072, "state": "ALIVE"},
+            {"id": "w0", "host": "spark-worker-1", "cores": 2, "memory": 3072, "state": "DEAD"},
+            {"id": "w2", "host": "spark-worker-2", "cores": 2, "memory": 3072, "state": "ALIVE"},
+        ]
+    }
+    assert [w["id"] for w in cluster.alive_workers(state)] == ["w1", "w2"]
+    assert cluster.alive_workers({}) == []
+
+
+def test_distribution_rule_needs_every_worker_above_the_share() -> None:
+    from metronome.bigdata import cluster
+
+    def ex(host: str, tasks: int) -> dict[str, object]:
+        return {"id": host, "host": host, "completed_tasks": tasks}
+
+    hosts = ["spark-worker-1", "spark-worker-2"]
+    even = [ex("spark-worker-1", 30), ex("spark-worker-2", 26)]
+    assert cluster.task_share_by_host(even)["spark-worker-1"] == pytest.approx(30 / 56)
+    assert cluster.distributed(even, hosts, 0.25)
+    lopsided = [ex("spark-worker-1", 50), ex("spark-worker-2", 6)]
+    assert not cluster.distributed(lopsided, hosts, 0.25)
+    # a worker whose executor never registered counts as zero
+    assert not cluster.distributed([ex("spark-worker-1", 56)], hosts, 0.25)
+    assert not cluster.distributed([], hosts, 0.25)
+
+
+def test_cluster_conf_splits_input_and_waits_for_all_executors() -> None:
+    from metronome.bigdata import cluster
+
+    conf = cluster.cluster_conf(n_workers=2, executor_cores=2, executor_memory="2g", partition_mib=8)
+    assert conf["spark.sql.files.maxPartitionBytes"] == str(8 * 1024 * 1024)
+    assert conf["spark.cores.max"] == "4"
+    assert conf["spark.scheduler.minRegisteredResourcesRatio"] == "1.0"
+    assert conf["spark.ui.enabled"] == "true"

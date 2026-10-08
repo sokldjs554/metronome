@@ -1,0 +1,28 @@
+# Spark standalone image for the M4 cluster run (protocol P16). The same image runs the master, the
+# workers and the driver, so Python, PySpark and the JVM are identical on every node.
+FROM eclipse-temurin:21-jre AS jre
+
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    JAVA_HOME=/opt/java/openjdk \
+    PATH=/opt/java/openjdk/bin:$PATH \
+    SPARK_WORKER_DIR=/tmp/spark-work
+
+COPY --from=jre /opt/java/openjdk /opt/java/openjdk
+
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install --no-cache-dir ".[spark]"
+
+# Non-root. /data is the shared volume (input CSV, output Parquet); an empty named volume takes this
+# ownership on first mount, so every node can write to it.
+RUN groupadd --gid 10001 metronome \
+    && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /app --shell /usr/sbin/nologin metronome \
+    && mkdir -p /data && chown -R metronome:metronome /data /app
+USER metronome
+
+CMD ["spark-class", "org.apache.spark.deploy.master.Master"]
