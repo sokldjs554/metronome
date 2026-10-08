@@ -1,0 +1,75 @@
+name: cloud-smoke
+
+# Operates the public Render deployment: every 6 hours (and on demand) wake the free instance, check
+# liveness, readiness, the deployment contract, a real forecast, Prometheus metrics and the browser
+# replay, and write the latencies to the run summary. A failing run notifies the repository owner.
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Base URL of the deployment (default: repository variable RENDER_URL)"
+        required: false
+  pull_request:
+    paths:
+      - ".github/workflows/cloud-smoke.yml"
+      - "render.yaml"
+      - "Dockerfile.demo"
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BASE: "${{ inputs.url || vars.RENDER_URL || 'https://metronome-demo.onrender.com' }}"
+    steps:
+      - name: wake the instance (a free instance sleeps after 15 idle minutes)
+        run: |
+          echo "target: $BASE"
+          for i in $(seq 1 30); do curl -sf -m 30 "$BASE/health" && break; sleep 10; done
+          curl -sf -m 30 "$BASE/health"
+      - name: readiness, deployment contract, forecast, metrics
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request
+
+          base = os.environ["BASE"].rstrip("/")
+
+          def get(path):
+              t0 = time.perf_counter()
+              with urllib.request.urlopen(base + path, timeout=30) as r:
+                  body = r.read()
+              return body, (time.perf_counter() - t0) * 1000
+
+          rows = []
+          body, ms = get("/ready"); ready = json.loads(body); rows.append(("/ready", ms, ready.get("model")))
+          assert ready.get("ready") is True, ready
+          body, ms = get("/v1/deployment"); dep = json.loads(body); rows.append(("/v1/deployment", ms, dep["dataset"]))
+          hist = [[0.0] * len(dep["channels"])] * dep["lookback"]
+          req = urllib.request.Request(base + "/v1/forecast", data=json.dumps({"history": hist}).encode(),
+                                       headers={"content-type": "application/json"})
+          lat = []
+          for _ in range(5):
+              t0 = time.perf_counter()
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  out = json.loads(r.read())
+              lat.append((time.perf_counter() - t0) * 1000)
+              assert len(out["forecast"]) == dep["horizon"], out
+          lat.sort()
+          rows.append(("/v1/forecast (5 calls, median)", lat[2], out["model_version"]))
+          body, ms = get("/metrics"); rows.append(("/metrics", ms, "prometheus"))
+          assert b"metronome_forecast_requests_total" in body
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(f"### {base}\n\n| route | ms | note |\n|---|---:|---|\n")
+              for route, ms, note in rows:
+                  f.write(f"| {route} | {ms:.0f} | {note} |\n")
+          print(json.dumps(rows))
+          PY
+      - name: browser replay page
+        # The replay route ships with the demo image; on a pull request the live service may not have it yet.
+        if: github.event_name != 'pull_request'
+        run: curl -sf -m 60 "$BASE/replay" | grep -q "<title>Metronome Replay</title>"

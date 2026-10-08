@@ -119,7 +119,7 @@ metronome worker --registry registry/etth1  # 다른 터미널: 재학습 job �
 ## 문서
 
 [프로토콜(사전 등록)](docs/protocol.md) · [결과](docs/results.md) · [논문 재현](docs/reproduction.md) · [서비스·추론 최적화](docs/serving.md) ·
-[대용량 처리](docs/bigdata.md) · [설계](docs/design.md) · [ADR](docs/adr/0001-fail-closed-registry.md) · [한계](docs/limitations.md)
+[대용량 처리](docs/bigdata.md) · [운영 런북](docs/operations.md) · [설계](docs/design.md) · [ADR](docs/adr/0001-fail-closed-registry.md) · [한계](docs/limitations.md)
 
 ## 주장하지 않는 것
 

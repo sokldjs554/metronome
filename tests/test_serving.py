@@ -214,3 +214,17 @@ def test_read_only_registry_still_serves(
     assert requested is not None and requested["job"] is None and "not writable" in requested["error"]
     assert c.get("/ready").status_code == 200
     assert c.get("/v1/monitor").json()["pending_jobs"] == []
+
+
+def test_replay_page_is_served_only_when_bundled(
+    deployment: dict, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The public demo image bundles the browser replay and serves it at /replay; other images return 404."""
+    monkeypatch.delenv("METRONOME_REPLAY_PAGE", raising=False)
+    assert TestClient(create_app(deployment["root"], threads=1)).get("/replay").status_code == 404
+    page = tmp_path / "replay.html"
+    page.write_text("<!doctype html><title>Metronome Replay</title>", encoding="utf-8")
+    monkeypatch.setenv("METRONOME_REPLAY_PAGE", str(page))
+    r = TestClient(create_app(deployment["root"], threads=1)).get("/replay")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+    assert "Metronome Replay" in r.text
