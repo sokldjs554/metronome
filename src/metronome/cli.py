@@ -324,6 +324,39 @@ def tf_repro(
 
 
 @app.command()
+def tune(
+    dataset: str,
+    kind: str = "etth",
+    horizon: int = 96,
+    trials: int = 40,
+    threads: int = 1,
+    processed_dir: Path = PROCESSED,
+    out_dir: Path = Path("artifacts/tune"),
+    mlflow_uri: str | None = "sqlite:///mlflow.db",
+) -> None:
+    """Pre-registered model improvement search (protocol P14): validation-only search, one test look."""
+    from metronome.tune.search import run_search
+
+    report = run_search(
+        dataset,
+        kind=kind,
+        horizon=horizon,
+        n_trials=trials,
+        processed_dir=processed_dir,
+        out_dir=out_dir,
+        threads=threads,
+        mlflow_uri=mlflow_uri,
+        log=typer.echo,
+    )
+    s = report["summary"]
+    typer.echo(
+        f"{dataset}: selected {report['selected_params']} test MSE {s['selected_test_mse_mean']:.4f} "
+        f"vs paper {s['paper_test_mse_mean']:.4f} ({s['mse_improvement_pct']:+.2f}%), "
+        f"{s['n_seeds_better']}/{len(report['test_seeds'])} seeds better"
+    )
+
+
+@app.command()
 def report(root: Path = Path(".")) -> None:
     """Aggregate artifacts -> summaries, charts, dashboard evidence (docs quote these via markers)."""
     from metronome.report.build import build_all

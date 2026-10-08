@@ -67,7 +67,7 @@ weather 는 <!-- num:artifacts/cadence_summary_extended.json#datasets/weather/ex
 |---|---|---|
 | AI 모델 설계·학습 | DLinear · NLinear · Linear · PatchTST 를 논문 설명으로 직접 구현, 단일 학습 루프(시드·조기 종료·lr 스케줄·웜 스타트) | `src/metronome/models`, `train/trainer.py`, `tests/test_models.py` |
 | 데이터 전처리 파이프라인 | URL+SHA-256 고정 소스, 스키마 검사(결측·중복·역행·간격), Polars 리샘플·보간, 학습 구간 전용 스케일러, DVC 단계 | `src/metronome/data`, `dvc.yaml`, `tests/test_data.py` |
-| 모델 성능 평가·개선 | 재학습 캐시 위 20개 정책, 7일 블록 부트스트랩 구간, 사전 등록 가설 H1~H4, 승격 게이트 | `src/metronome/cadence`, [protocol.md](docs/protocol.md), [results.md](docs/results.md) |
+| 모델 성능 평가·개선 | 재학습 캐시 위 20개 정책, 7일 블록 부트스트랩 구간, 사전 등록 가설 H1~H5, 승격 게이트, Optuna 로 검증 구간에서만 고르고 시험은 한 번 보는 모델 개선 탐색(H5 기각: 논문 레시피가 이미 최적 근처) | `src/metronome/cadence`, `src/metronome/tune`, [protocol.md](docs/protocol.md), [results.md](docs/results.md), [model_search.md](docs/model_search.md) |
 | 서비스 적용을 위한 추론 최적화 | ONNX Runtime 서빙(이미지에 torch 없음), parity 검증, 동적 INT8 비교, 엔진 교대 지연 벤치, HTTP 지연 | `src/metronome/export`, [serving.md](docs/serving.md) |
 | 실험 결과 문서화·공유 | 숫자 마커(문서 ↔ JSON 대조를 CI 가 수행), 프로토콜 변경 이력, ADR, 사후 탐색 표시 | `scripts/check_numbers.py`, `docs/` |
 | Python 기반 개발 | 전 모듈 Python, 타입 힌트와 mypy strict(데이터·검출기·캐시·서빙), ruff, pytest, Python 3.11·3.12·3.13 을 CI 가 실행 | `pyproject.toml`, `tests/`, `.github/workflows/ci.yml` |
@@ -118,10 +118,10 @@ metronome worker --registry registry/etth1  # 다른 터미널: 재학습 job �
 
 ## 문서
 
-[프로토콜(사전 등록)](docs/protocol.md) · [결과](docs/results.md) · [논문 재현](docs/reproduction.md) · [서비스·추론 최적화](docs/serving.md) ·
+[프로토콜(사전 등록)](docs/protocol.md) · [결과](docs/results.md) · [모델 개선 탐색](docs/model_search.md) · [논문 재현](docs/reproduction.md) · [서비스·추론 최적화](docs/serving.md) ·
 [대용량 처리](docs/bigdata.md) · [운영 런북](docs/operations.md) · [설계](docs/design.md) · [ADR](docs/adr/0001-fail-closed-registry.md) · [한계](docs/limitations.md)
 
 ## 주장하지 않는 것
 
-실제 고객·설비 데이터, 금액으로 환산한 재학습 비용, 다중 노드 클러스터, AWS·GCP·Azure 운영, 모델 구조 탐색, 다인 협업 이력, 운영 SLA.
+실제 고객·설비 데이터, 금액으로 환산한 재학습 비용, 다중 노드 클러스터, AWS·GCP·Azure 운영, 다인 협업 이력, 운영 SLA.
 자세한 조건은 [docs/limitations.md](docs/limitations.md) 에 있습니다. 데이터의 권리는 각 제공자에게 있으며 코드는 MIT 입니다.

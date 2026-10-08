@@ -115,3 +115,29 @@ def test_models_accept_numpy_roundtrip() -> None:
     x = np.random.default_rng(0).normal(size=(2, L, C)).astype(np.float32)
     y = model(torch.from_numpy(x)).detach().numpy()
     assert y.dtype == np.float32
+
+
+@pytest.mark.parametrize("norm", ["last", "revin"])
+def test_dlinear_norm_is_shift_equivariant(norm: str) -> None:
+    """With window normalization a constant level shift of the input shifts the forecast by the same
+    constant, which is what makes these variants robust to level changes."""
+    from metronome.models.linear import DLinear
+
+    torch.manual_seed(0)
+    model = DLinear(48, 12, 3, kernel_size=13, norm=norm).eval()
+    x = torch.randn(4, 48, 3)
+    with torch.no_grad():
+        y, y_shift = model(x), model(x + 5.0)
+    assert torch.allclose(y_shift, y + 5.0, atol=1e-4)
+    if norm == "revin":  # also scale-equivariant
+        with torch.no_grad():
+            assert torch.allclose(model(3.0 * x), 3.0 * y, atol=1e-3)
+
+
+def test_dlinear_rejects_unknown_norm_and_default_is_unchanged() -> None:
+    from metronome.models.linear import DLinear
+
+    with pytest.raises(ValueError):
+        DLinear(48, 12, 3, norm="batch")
+    a, b = DLinear(48, 12, 3), DLinear(48, 12, 3, norm="none")
+    assert set(a.state_dict()) == set(b.state_dict())  # no new weights: ONNX export and registry unchanged
