@@ -32,6 +32,7 @@ resource "azurerm_container_app" "demo" {
   resource_group_name          = azurerm_resource_group.rg.name
   revision_mode                = "Single"
   workload_profile_name        = "Consumption"
+  max_inactive_revisions       = 100 # the service default; left unset, the provider would clear it
 
   template {
     min_replicas = 0 # scale to zero when idle: the free subscription pays only for requests
