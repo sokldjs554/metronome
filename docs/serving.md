@@ -11,6 +11,12 @@
 | `GET /health` · `GET /ready` | 프로세스 생존 / 검증을 통과한 모델이 메모리에 있을 때만 200 |
 | `GET /metrics` | Prometheus: 요청 수(버전별), 지연 히스토그램, 교체 횟수, 최근 7일 MAE, 활성 버전 |
 | `POST /v1/replay/start` · `POST /v1/replay/step` · `GET /v1/replay` | 기록된 스트림을 시간순으로 재생(데모·통합 테스트) |
+| `GET /v1/data/profile` | 배포된 데이터의 출처(URL·SHA-256), 처리본 해시, 주기·채널·기간, 초기 학습/스트림 분할, 채널별 통계, 구간 평균 스파크라인, 준비 단계의 검사 보고서 |
+| `POST /v1/data/validate` | CSV 업로드(multipart, 5 MB 까지) → 같은 파이프라인의 검사(중복·역행·간격·NaN·상수 채널·못 읽은 시각)와 채널 통계, 앞 5행. 파일은 저장하지 않음. polars 가 없는 서빙 이미지에서는 501 |
+| `GET /v1/leaderboard` | 오프라인 LTSF 실행에서 모델 계열별 시험 MSE·MAE·파라미터·학습 시간(시드 평균, `static/evidence.json`) + 레지스트리의 실제 버전 목록 |
+| `GET /v1/candidates` · `POST /v1/candidates` · `POST /v1/candidates/promote` | 재학습 작업 목록(상태·계열·버전·검증 MAE·게이트 판단). 계열(linear·nlinear·dlinear·patchtst)과 최대 에포크를 골라 후보 학습 작업을 등록(활성화 안 함, 한 번에 하나). 승격은 후보 검증 MAE 가 현재 모델의 최근 7일 MAE(없으면 배포 시 검증 MAE)보다 낮을 때만, `force` 로 수동 활성화 |
+| `GET /v1/models/{v}` · `GET /v1/models/{v}/card` · `POST /v1/models/rollback` | 버전 매니페스트, 마크다운 모델 카드(학습 구간·지표·해시·입출력 계약·호출 예), 직전 버전으로 되돌리기(교체 이력 기준, 검증 후 교체) |
+| `GET /v1/replay/window` · `GET /v1/workbench` | 현재 스트림 시점의 lookback 입력과 그 뒤 horizon 의 실제값(예측 대 실제 차트용), 대시보드 머리말 요약 |
 
 입력 검증: 행렬 크기, 유한값(NaN·Inf 거부, 422), 채널 수. 검증 오류 응답은 입력을 되돌려주지 않습니다
 (NaN 이 섞인 본문이 응답 직렬화를 깨뜨려 500 이 되지 않도록).

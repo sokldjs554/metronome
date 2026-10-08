@@ -93,3 +93,10 @@ jobs:
         # The replay route ships with the demo image; on a pull request the live service may not have it yet.
         if: github.event_name != 'pull_request'
         run: curl -sf -m 60 "$BASE/replay" | grep -q "<title>Metronome Replay</title>"
+      - name: workbench routes answer (data profile, leaderboard, candidates list)
+        # The live service only carries merged code, so a pull request cannot be checked against it yet.
+        if: github.event_name != 'pull_request'
+        run: |
+          curl -sf -m 60 "$BASE/v1/data/profile" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['n_rows']>0 and d['channel_stats'], d; print('profile', d['dataset'], d['n_rows'], 'rows')"
+          curl -sf -m 60 "$BASE/v1/leaderboard" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['live'], d; print('leaderboard', len(d['offline']), 'offline rows,', len(d['live']), 'live versions')"
+          curl -sf -m 60 "$BASE/v1/candidates" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'jobs' in d; print('candidates', len(d['jobs']), 'jobs')"

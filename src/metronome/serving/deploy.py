@@ -7,6 +7,7 @@ starts.
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,18 @@ def init_deployment(
         )
     )
     stream_path = write_stream(registry_root / "stream.npz", ts, values)
+    # The dataset's provenance (source URL + SHA-256, transformation, validation report) travels
+    # with the registry so the service can show where its data came from.
+    (registry_root / "dataset.json").write_text(
+        json.dumps(
+            {
+                k: manifest.get(k)
+                for k in ("name", "spec", "source", "content_sha256", "filled_rows", "validation")
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
     t0 = time.perf_counter()
     net, scaler, metrics = train_replacement(
         values,

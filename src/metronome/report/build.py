@@ -384,7 +384,37 @@ def build_charts(cadence_dir: Path, summary: dict[str, Any], charts_dir: Path) -
     return written
 
 
-def write_evidence(summary: dict[str, Any], path: Path) -> Path:
+def leaderboard_rows(ltsf: dict[str, Any] | None) -> dict[str, list[dict[str, Any]]]:
+    """Model families compared on the same split, averaged over seeds, per dataset (for the dashboard)."""
+    groups: dict[tuple[str, str, int], list[dict[str, Any]]] = {}
+    for run in (ltsf or {}).get("runs", {}).values():
+        groups.setdefault((run["dataset"], run["model"], int(run["horizon"])), []).append(run)
+    out: dict[str, list[dict[str, Any]]] = {}
+
+    def mean(runs: list[dict[str, Any]], key: str) -> float | None:
+        vals = [r[key] for r in runs if r.get(key) is not None]
+        return float(np.mean(vals)) if vals else None
+
+    for (dataset, model, horizon), runs in sorted(groups.items()):
+        out.setdefault(dataset, []).append(
+            {
+                "model": model,
+                "horizon": horizon,
+                "lookback": runs[0].get("lookback"),
+                "mse": mean(runs, "mse"),
+                "mae": mean(runs, "mae"),
+                "epochs": mean(runs, "epochs"),
+                "train_seconds": mean(runs, "train_seconds"),
+                "n_parameters": runs[0].get("n_parameters"),
+                "n_seeds": len(runs),
+            }
+        )
+    for rows in out.values():
+        rows.sort(key=lambda r: (r["horizon"], r["mse"] if r["mse"] is not None else float("inf")))
+    return out
+
+
+def write_evidence(summary: dict[str, Any], path: Path, ltsf: dict[str, Any] | None = None) -> Path:
     datasets = {}
     for dataset, variants in summary["datasets"].items():
         pol = variants.get("expanding", {}).get("policies")
@@ -400,7 +430,13 @@ def write_evidence(summary: dict[str, Any], path: Path) -> Path:
         datasets[dataset] = {"policies": rows, "representative": rep_row}
     note = "사전 등록 프로토콜(docs/protocol.md)의 오프라인 실험. DLinear 콜드 재학습 캐시, 시드 3개 평균, 고정 척도 MAE."
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"note": note, "datasets": datasets}, indent=1, ensure_ascii=False))
+    payload = {
+        "note": note,
+        "datasets": datasets,
+        "leaderboard": leaderboard_rows(ltsf),
+        "leaderboard_note": "같은 분할(마지막 20% 시험, 표준화 MSE/MAE)에서 모델 계열을 비교한 LTSF 실행, 시드 평균. artifacts/ltsf_summary.json",
+    }
+    path.write_text(json.dumps(payload, indent=1, ensure_ascii=False))
     return path
 
 
@@ -428,7 +464,7 @@ def build_all(root: Path) -> dict[str, Any]:
     charts = (
         build_charts(cadence_dir, summary, root / "docs" / "assets" / "charts") if summary["datasets"] else []
     )
-    evidence = write_evidence(summary, root / "src" / "metronome" / "static" / "evidence.json")
+    evidence = write_evidence(summary, root / "src" / "metronome" / "static" / "evidence.json", ltsf)
     return {
         "cadence_summary": summary,
         "ltsf_summary": ltsf,

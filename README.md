@@ -6,14 +6,21 @@
 > 모든 데이터는 **공개 벤치마크**(ETT, Jena weather, UCI electricity, PeMS traffic, M4)입니다.
 > 개인 프로젝트입니다.
 
-## 30초 데모
+## 데모: 다섯 단계를 한 화면에서
 
-![Metronome 데모 — 스트림 재생 중 검출기 경보 → 재학습 → 검증된 새 버전으로 무중단 교체](docs/assets/demo/demo.gif)
+![Metronome 데모 — 데이터 검사, 모델 계열 비교와 게이트, 원클릭 배포, 오차 감시와 무중단 교체, 재학습 정책](docs/assets/demo/demo.gif)
 
-ETTh1 의 마지막 1년을 시간순으로 재생합니다. 2017-07-02 에 Page–Hinkley 검출기가 울리고, worker 가 그 시점까지의 데이터로
-다시 학습한 모델을 ONNX 로 내보내 등록하면, API 가 **해시와 참조 입출력을 다시 검증한 뒤** 포인터만 바꿉니다. 교체 중 요청은
-하나도 실패하지 않습니다(테스트로 고정). [첫 화면](docs/assets/demo/01-ready.png) · [교체 직후](docs/assets/demo/05-after-swap.png) ·
-[모바일](docs/assets/demo/06-mobile.png) · [캡처 보고서](docs/assets/demo/capture-report.json)
+대시보드는 Model Craft 류 제품이 묶는 흐름을 그대로 따라갑니다. 모든 버튼은 실제 API 를 부릅니다.
+
+| 단계 | 화면에서 하는 일 | 뒤에서 도는 것 |
+|---|---|---|
+| 1 · [데이터](docs/assets/demo/01-data.png) | 배포된 데이터의 출처(URL·SHA-256)·분할·채널 통계·검사 결과를 보고, **내 CSV 를 올려** 같은 검사(중복·역행·간격·결측·상수 채널)를 돌려 봅니다 | `GET /v1/data/profile`, `POST /v1/data/validate` → `data.schema.validate_frame` |
+| 2 · [모델 비교](docs/assets/demo/02-models.png) | 같은 분할에서 비교한 모델 계열(naive → Linear → DLinear → PatchTST)의 시험 오차·파라미터·학습 시간을 보고, 계열을 골라 **후보를 학습**합니다. 게이트는 후보의 검증 MAE 가 현재 모델보다 낮을 때만 승격합니다 | `GET /v1/leaderboard`, `POST /v1/candidates` → worker 가 학습·ONNX·parity·등록, `POST /v1/candidates/promote` |
+| 3 · [배포](docs/assets/demo/03-deploy.png) | 버전 표에서 **한 번 눌러 활성화·롤백**, 모델 카드(학습 구간·지표·해시·입출력 계약) 열기, 지금 시점에서 **예측을 호출**해 실제값과 겹쳐 보기 | `POST /v1/models/{v}/activate`(해시·참조 입출력 재검증), `POST /v1/models/rollback`, `GET /v1/models/{v}/card`, `POST /v1/forecast` |
+| 4 · [감시 · 재학습](docs/assets/demo/04-monitor.png) | ETTh1 의 마지막 1년을 시간순으로 재생합니다. 검출기(비율·Page–Hinkley·ADWIN)가 울리면 재학습이 요청되고, worker 가 등록한 새 버전을 API 가 **검증한 뒤 포인터만 바꿉니다**. 교체 중 요청은 하나도 실패하지 않습니다(테스트로 고정) | `POST /v1/replay/*`, `POST /v1/observe`, `GET /v1/monitor`, `GET /metrics` |
+| 5 · [재학습 정책](docs/assets/demo/05-policy.png) | 이 데이터셋에서 어떤 재학습 정책이 좋은지(오프라인 실험, 사전 등록) 보고, 그 정책으로 재생을 시작합니다 | `static/evidence.json` ← `artifacts/cadence_summary.json`(숫자는 CI 가 대조) |
+
+[모바일](docs/assets/demo/06-mobile.png) · [캡처 보고서](docs/assets/demo/capture-report.json) · [검사용 예시 CSV](docs/assets/demo/sample.csv). 캡처는 `scripts/capture_demo.py` 가 실제 서비스를 돌려 만들고, CI 의 `demo-image` 잡이 같은 흐름(프로필 → CSV 검사 → 후보 학습 → 게이트 → 카드 → 롤백)을 컨테이너에서 매번 실행합니다.
 
 **서버 데모 → [Azure Container Apps](https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io) · [Render](https://metronome-demo.onrender.com)** — 같은 이미지로 실제 서빙 스택(ONNX Runtime API, 감시, 재학습)이 돌고 있습니다. Azure 는 main 에 머지될 때마다 GitHub Actions 가 키 없는 OIDC 로그인으로 자동 배포하고(한국 중부, 요청이 없으면 0대로 축소), Render 는 블루프린트로 올렸습니다. 둘 다 요청이 없으면 잠들어 첫 요청에 1분 안팎 걸립니다. `cloud-smoke` 가 6시간마다 두 주소의 health·ready·예측·지표·리플레이를 점검합니다.
 
