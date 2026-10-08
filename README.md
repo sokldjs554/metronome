@@ -14,9 +14,11 @@
 ![fastapi](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![azure](https://img.shields.io/badge/Azure_Container_Apps-0078D4?logo=microsoftazure&logoColor=white)
 
-**[Azure 데모](https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io)** · **[Render 데모](https://metronome-demo.onrender.com)** · **[브라우저 리플레이(서버 없음)](https://sokldjs554.github.io/metronome/)** — 서버 데모는 첫 접속에 1분 안팎
+**[Azure 데모](https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io)** · **[Render 데모](https://metronome-demo.onrender.com)** · **[브라우저 리플레이(서버 없음)](https://sokldjs554.github.io/metronome/)** · [API 문서](https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io/docs) · [실험 리포트](docs/results.md) — 서버 데모는 첫 접속에 1분 안팎
 
 </div>
+
+**결론 한 줄** — 재학습이 통하는 데이터(ETTh2)에서는 오차 감시 정책이 재학습 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/n_refits:.0f -->19<!-- /num -->회로 매일 재학습 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->0.98<!-- /num -->배를 얻고, 안 통하는 데이터(weather · electricity)는 배포 전에 걸러집니다. 그 결론대로 움직이는 서빙이 지금 Azure 에서 돌고 있습니다.
 
 ![Metronome 데모 — 데이터 검사, 모델 계열 비교와 게이트, 원클릭 배포, 오차 감시와 무중단 교체, 재학습 정책](docs/assets/demo/demo.gif)
 
@@ -62,7 +64,7 @@
 | 4 · [감시 · 재학습](docs/assets/demo/04-monitor.png) | ETTh1 의 마지막 1년을 시간순으로 재생합니다. 검출기가 울리면 worker 가 재학습하고, API 는 해시·참조 입출력을 **검증한 뒤 포인터만 바꿉니다**. 교체 중 실패하는 요청은 0건(테스트로 고정) |
 | 5 · [재학습 정책](docs/assets/demo/05-policy.png) | 이 데이터에 맞는 정책(2절의 오프라인 실험)을 보고, 그 정책으로 재생을 시작합니다 |
 
-CI 의 `demo-image` 잡이 같은 흐름(프로필 → CSV 검사 → 후보 학습 → 게이트 → 카드 → 롤백)을 컨테이너에서 매번 실행합니다. API 경로는 [docs/evidence.md](docs/evidence.md#데모의-다섯-단계와-뒤에서-도는-api).
+위 캡처를 만들 때 실제로 일어난 일([캡처 보고서](docs/assets/demo/capture-report.json)): ① Linear 후보는 게이트가 거부 — "<!-- num:docs/assets/demo/capture-report.json#gate -->게이트 거부: 후보 0.3770 ≥ 현재 0.3722 (val_mae_fixed). 강제로 올릴 수는 있습니다.<!-- /num -->" ② 리플레이 <!-- num:docs/assets/demo/capture-report.json#steps_to_swap:d -->23<!-- /num -->일째 검출기 경보 → worker 재학습 → <!-- num:docs/assets/demo/capture-report.json#first_version -->v0001<!-- /num --> 에서 <!-- num:docs/assets/demo/capture-report.json#monitor/active -->v0003<!-- /num --> 으로 무중단 교체. CI 의 `demo-image` 잡이 같은 흐름(프로필 → CSV 검사 → 후보 학습 → 게이트 → 카드 → 롤백)을 컨테이너에서 매번 실행합니다. API 경로는 [docs/evidence.md](docs/evidence.md#데모의-다섯-단계와-뒤에서-도는-api).
 
 ## 4. 시스템 아키텍처
 
@@ -112,6 +114,7 @@ flowchart LR
 | ONNX parity | PyTorch 출력과 최대 절대 차이 ≤ 1e-4 | 등록 거부 |
 | 해시 · 참조 입출력 | 활성화 때 다시 계산해 매니페스트와 일치 | 422 로 거부, 현재 모델이 계속 응답 |
 
+- **서빙 성능** (DLinear, 4 vCPU): 모델 호출 p95 가 PyTorch <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/torch/p95_ms:.3f -->0.339<!-- /num --> ms → ONNX Runtime <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/ort_fp32/p95_ms:.3f -->0.118<!-- /num --> ms(배치 1). HTTP 왕복 p50 <!-- num:artifacts/serving/http_latency.json#http_ms/p50:.2f -->4.43<!-- /num --> ms · p95 <!-- num:artifacts/serving/http_latency.json#http_ms/p95:.2f -->5.87<!-- /num --> ms(loopback), 동시 클라이언트 8 에서 <!-- num:artifacts/serving/http_load.json#levels/8/requests_per_s:.0f -->304<!-- /num --> req/s. 자세한 표는 [docs/serving.md](docs/serving.md).
 - **테스트 · CI**: pytest 99개(교체 중 요청 손실 0, 검증 실패 시 거부, CSV 검사, 후보 게이트, 롤백, 검출기·캐시·전처리 회귀), 커버리지 하한 70%, Python 3.11–3.13. CI 12개 잡이 lint · 테스트 · 파이프라인 smoke · Docker · compose 와 kind 의 재학습 루프 · Airflow DAG · 데모 이미지 · TensorFlow 교차 재현 · 문서 숫자 대조를 실행합니다.
 
 ## 6. 운영
