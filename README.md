@@ -15,7 +15,7 @@ ETTh1 의 마지막 1년을 시간순으로 재생합니다. 2017-07-02 에 Page
 하나도 실패하지 않습니다(테스트로 고정). [첫 화면](docs/assets/demo/01-ready.png) · [교체 직후](docs/assets/demo/05-after-swap.png) ·
 [모바일](docs/assets/demo/06-mobile.png) · [캡처 보고서](docs/assets/demo/capture-report.json)
 
-**서버 데모(Render) → [metronome-demo.onrender.com](https://metronome-demo.onrender.com)** — 실제 서빙 스택(ONNX Runtime API, 감시, 재학습)이 돌고 있습니다. 무료 인스턴스라 15분 동안 요청이 없으면 잠들고, 첫 요청에서 깨어나는 데 1분 안팎 걸립니다. `cloud-smoke` 가 6시간마다 health·ready·예측·지표·리플레이를 점검합니다.
+**서버 데모 → [Azure Container Apps](https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io) · [Render](https://metronome-demo.onrender.com)** — 같은 이미지로 실제 서빙 스택(ONNX Runtime API, 감시, 재학습)이 돌고 있습니다. Azure 는 main 에 머지될 때마다 GitHub Actions 가 키 없는 OIDC 로그인으로 자동 배포하고(한국 중부, 요청이 없으면 0대로 축소), Render 는 블루프린트로 올렸습니다. 둘 다 요청이 없으면 잠들어 첫 요청에 1분 안팎 걸립니다. `cloud-smoke` 가 6시간마다 두 주소의 health·ready·예측·지표·리플레이를 점검합니다.
 
 **브라우저에서 직접 돌려보기 → [Metronome Replay](https://sokldjs554.github.io/metronome/)** — 서버 없이 한 파일로 같은 1년 스트림을 재생합니다.
 실제 서빙 스택에서 기록한 리플레이(`scripts/record_replay.py`)의 각 버전 DLinear 가중치를 ONNX 에서 꺼내 브라우저가 직접
@@ -79,7 +79,7 @@ weather 는 <!-- num:artifacts/cadence_summary_extended.json#datasets/weather/ex
 | 문제 해결 중심 소통 | 첫 결과에서 본 결함(이상 구간 재학습이 모델을 망침)과 그 대응(게이트)을 사후 탐색으로 구분해 기록 | [protocol.md 변경 이력](docs/protocol.md#변경-이력), [results.md](docs/results.md) |
 | PyTorch 또는 TensorFlow (우대) | PyTorch 로 모델과 학습 루프를 구현하고, 같은 DLinear 를 TensorFlow/Keras 로도 구현해 가중치 이식 시 출력 일치, 같은 초기값·배치 순서로 함께 학습 시 시험 MSE 차이 0.001% 미만을 확인했습니다(사전 등록 P15) | `src/metronome/models`, `src/metronome/tfmodels.py`, [reproduction.md](docs/reproduction.md#tensorflow-교차-재현-protocol-p15) |
 | MLOps (우대) | 해시·참조 입출력으로 검증하는 파일 레지스트리와 원자적 교체, MLflow(sqlite) 기록, DVC 파이프라인(`dvc dag`: prepare → cache → simulate → report), 승격 게이트 | `serving/registry.py`, `tracking/`, `dvc.yaml`, [ADR 0001](docs/adr/0001-fail-closed-registry.md) |
-| 클라우드 환경 운영 (우대) | 브라우저 리플레이를 GitHub Pages 에 자동 배포해 공개로 운영하고(배포 후 공개 주소를 직접 확인), main 머지마다 서빙·worker 이미지를 GHCR 에 커밋 태그로 게시합니다(롤백용). Docker 이미지 3종과 compose 의 감시 → 재학습 → 교체 루프는 CI 의 `compose` 잡이 실제 컨테이너로 실행합니다. 서버 데모는 Render 블루프린트(`render.yaml`)로 [공개 배포](https://metronome-demo.onrender.com)했고, `cloud-smoke` 가 6시간마다 health·ready·배포 계약·예측 5회·Prometheus 지표·리플레이를 점검하며, 배포·롤백·장애 대응은 운영 런북에 적었습니다. **AWS·GCP·Azure 운영은 하지 않았습니다** | `.github/workflows/pages.yml`·`images.yml`·`cloud-smoke.yml`, `Dockerfile*`, `docker-compose.yml`, `render.yaml`, [운영 런북](docs/operations.md) |
+| 클라우드 환경 운영 (우대) | 브라우저 리플레이를 GitHub Pages 에 자동 배포해 공개로 운영하고(배포 후 공개 주소를 직접 확인), main 머지마다 서빙·worker 이미지를 GHCR 에 커밋 태그로 게시합니다(롤백용). Docker 이미지 3종과 compose 의 감시 → 재학습 → 교체 루프는 CI 의 `compose` 잡이 실제 컨테이너로 실행합니다. 서버 데모는 main 에 머지될 때마다 `azure` 워크플로가 키 없는 OIDC 로그인으로 [Azure Container Apps](https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io) 에 자동 배포하고(이미지 게시 → 앱 갱신 → 트래픽을 받는 리비전이 그 이미지로 건강한지 확인 → 점검), Render 블루프린트(`render.yaml`)로도 [올렸습니다](https://metronome-demo.onrender.com). `cloud-smoke` 가 6시간마다 두 주소의 health·ready·배포 계약·예측 5회·Prometheus 지표·리플레이를 점검하고, 배포·롤백(이전 커밋의 이미지 태그로 재배포)·장애 대응은 운영 런북에 적었습니다. **AWS·GCP 운영은 하지 않았습니다** | `.github/workflows/azure.yml`·`cloud-smoke.yml`·`images.yml`·`pages.yml`, `Dockerfile*`, `docker-compose.yml`, `render.yaml`, [운영 런북](docs/operations.md) |
 | 대규모 데이터 처리 (우대) | M4 <!-- num:artifacts/bigdata/bigdata.json#engines/0/n_series:, -->100,000<!-- /num --> 시계열(<!-- num:artifacts/bigdata/bigdata.json#engines/0/n_cells:, -->24,002,047<!-- /num --> 셀)을 Polars·pandas·PySpark(`local[4]`)로 처리해 결과가 같음을 검사했습니다. 같은 Spark 코드를 standalone 클러스터(master 1 + worker 2, 각자 컨테이너, 공유 볼륨)에 올려 Polars 와 결과가 같고 두 worker 가 태스크를 <!-- num:artifacts/bigdata/bigdata_cluster.json#executors/0/completed_tasks -->39<!-- /num -->개·<!-- num:artifacts/bigdata/bigdata_cluster.json#executors/1/completed_tasks -->52<!-- /num -->개로 나눠 처리함을 확인했으며(protocol P16), CI 가 같은 구성을 다시 실행합니다. 한 호스트 위의 컨테이너 클러스터이고 다중 노드 운영은 아닙니다 | `src/metronome/bigdata`, `docker-compose.spark.yml`, [bigdata.md](docs/bigdata.md#클러스터-실행-protocol-p16) |
 | 논문 구현·재현 (우대) | DLinear·PatchTST 를 논문 설명으로 구현해 보고값과 대조했습니다. 기준(MSE ±3%) 안인 설정과 밖인 설정(DLinear·Linear ETTh1)을 시드 편차와 함께 그대로 적었습니다 | `models`, `eval/ltsf.py`, [reproduction.md](docs/reproduction.md) |
 
@@ -125,5 +125,5 @@ metronome worker --registry registry/etth1  # 다른 터미널: 재학습 job �
 
 ## 주장하지 않는 것
 
-실제 고객·설비 데이터, 금액으로 환산한 재학습 비용, 다중 노드 클러스터, AWS·GCP·Azure 운영, 다인 협업 이력, 운영 SLA.
+실제 고객·설비 데이터, 금액으로 환산한 재학습 비용, 다중 노드 클러스터, AWS·GCP 운영, 다인 협업 이력, 운영 SLA.
 자세한 조건은 [docs/limitations.md](docs/limitations.md) 에 있습니다. 데이터의 권리는 각 제공자에게 있으며 코드는 MIT 입니다.

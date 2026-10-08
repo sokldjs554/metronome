@@ -1,7 +1,8 @@
 # 운영 런북
 
-공개로 운영하는 것은 세 가지입니다. 서버 데모는 Render 무료 웹 서비스 하나(`render.yaml`, `Dockerfile.demo`,
-https://metronome-demo.onrender.com, 싱가포르 리전, 2026-10-08 배포)이고, 브라우저 리플레이는 GitHub Pages, 서빙·worker 이미지는 GHCR 에 있습니다.
+공개로 운영하는 것은 네 가지입니다. 서버 데모(`Dockerfile.demo`)는 Azure Container Apps(https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io,
+한국 중부, 2026-10-08 배포, main 머지마다 자동 배포)와 Render 무료 웹 서비스(`render.yaml`, https://metronome-demo.onrender.com, 싱가포르 리전,
+2026-10-08 배포) 두 곳에 있고, 브라우저 리플레이는 GitHub Pages, 서빙·worker·데모 이미지는 GHCR 에 있습니다.
 두 컨테이너 구성(`docker-compose.yml`)과 이미지는 같은 코드로 다른 환경에 올릴 때 씁니다.
 
 ## 배포
@@ -59,14 +60,16 @@ curl -s $BASE/ready                                       # model 이 v0001 인�
 | 증상 | 먼저 볼 것 | 조치 |
 |---|---|---|
 | `cloud-smoke` 가 `/health` 에서 실패 | Render 대시보드의 Events·Logs | 빌드 실패면 직전 배포로 Rollback, 무료 시간 소진이면 다음 달까지 대기 |
+| `cloud-smoke` 가 Azure 주소의 `/health` 에서 실패 | `azure` 워크플로의 마지막 실행, `az containerapp logs show -g metronome-rg -n metronome-demo --tail 200` | 리비전이 Healthy 가 아니면 이전 커밋의 `sha-` 태그로 `azure` 워크플로 재실행, 이미지 pull 실패면 GHCR 패키지가 Public 인지 확인 |
 | `/ready` 가 false | `/v1/models` 의 `load_error` | 레지스트리 검증 실패. 직전 버전 activate |
 | 지연 급증 | `/metrics` 의 지연 히스토그램, 동시에 돈 재학습 | 무료 인스턴스는 CPU 하나라 재학습 중에는 예측이 느려질 수 있음 |
 | 경보가 계속 울림 | `/v1/monitor` 의 경보 날짜와 기준선 | 이상 구간이면 승격 게이트로 나쁜 후보의 교체를 막음([results.md](results.md)) |
 
 ## 이 배포의 한계
 
-- 무료 인스턴스는 15분 동안 요청이 없으면 잠들고, 다음 요청에서 깨어나는 데 1분 안팎이 걸립니다.
+- Render 무료 인스턴스는 15분 동안 요청이 없으면 잠들고, Azure 앱은 요청이 없으면 0대로 줄어듭니다. 둘 다 다음 요청에서 깨어나는 데 1분 안팎이 걸립니다.
+- Azure 는 Container Apps 소비 플랜의 월 무료 할당량(vCPU·메모리 시간, 요청 수) 안에서 돌리며, 0대 축소 덕에 점검 요청만으로는 할당량을 넘지 않습니다. 구독은 소유자의 무료 계정이라 크레딧·기간이 끝나면 서비스가 멈출 수 있습니다.
 - 컨테이너 파일 시스템은 재시작·재배포 때 초기화됩니다. 그래서 운영 중에 재학습한 버전은 사라지고 이미지에 구운 v0001 로 돌아갑니다.
   버전을 남기려면 유료 영구 디스크를 레지스트리 경로(`METRONOME_REGISTRY`)에 붙여야 합니다.
 - `METRONOME_API_KEY` 를 비워 두면 누구나 리플레이를 시작하고 모델을 활성화할 수 있습니다. 키를 넣으면 활성화·재적재·리플레이 시작이 보호됩니다.
-- AWS·GCP·Azure 에서 운영하지 않았습니다. 이미지와 compose 는 어느 컨테이너 플랫폼에서도 같은 방식으로 돌아갑니다.
+- AWS·GCP 에서는 운영하지 않았습니다. 이미지와 compose 는 어느 컨테이너 플랫폼에서도 같은 방식으로 돌아갑니다.
