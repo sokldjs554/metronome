@@ -17,7 +17,13 @@ resource "azurerm_container_app_environment" "env" {
   name                       = var.environment_name
   location                   = azurerm_resource_group.rg.location
   resource_group_name        = azurerm_resource_group.rg.name
+  logs_destination           = var.log_analytics_workspace_name == "" ? null : "log-analytics"
   log_analytics_workspace_id = var.log_analytics_workspace_name == "" ? null : data.azurerm_log_analytics_workspace.law[0].id
+
+  workload_profile {
+    name                  = "Consumption"
+    workload_profile_type = "Consumption"
+  }
 }
 
 resource "azurerm_container_app" "demo" {
@@ -25,6 +31,7 @@ resource "azurerm_container_app" "demo" {
   container_app_environment_id = azurerm_container_app_environment.env.id
   resource_group_name          = azurerm_resource_group.rg.name
   revision_mode                = "Single"
+  workload_profile_name        = "Consumption"
 
   template {
     min_replicas = 0 # scale to zero when idle: the free subscription pays only for requests
