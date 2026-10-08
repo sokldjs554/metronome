@@ -60,6 +60,8 @@
 
 INT8 편차 (배치 1): <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/1/ort_int8/max_abs_diff_vs_torch:.2e -->1.14e-02<!-- /num -->.
 
+**PatchTST 에서 INT8 은 이득이 없습니다.** 배치 16 에서는 FP32 <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/16/ort_fp32/p95_ms:.3f -->18.471<!-- /num --> ms 대 INT8 <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/16/ort_int8/p95_ms:.3f -->19.705<!-- /num --> ms 로 오히려 느리고, 배치 1 에서도 같은 수준(<!-- num:artifacts/optimization/benchmark_patchtst.json#batches/1/ort_fp32/p95_ms:.3f -->1.631<!-- /num --> 대 <!-- num:artifacts/optimization/benchmark_patchtst.json#batches/1/ort_int8/p95_ms:.3f -->1.629<!-- /num --> ms)입니다. 원인은 확인하지 않았습니다. 어텐션·정규화 연산의 비중이 커서 동적 양자화가 줄일 부분이 작을 수 있지만 연산별 프로파일을 하지 않아 가설일 뿐입니다. 이득이 있었던 것은 PyTorch eager 에서 ONNX Runtime FP32 로 옮긴 배치 1 의 한 걸음입니다(위 표).
+
 **채택:** 서빙 엔진은 ONNX Runtime FP32 입니다. INT8 은 수치와 편차를 보고 데이터셋별로 판단할 수 있도록 표만 남깁니다.
 서빙 이미지는 PyTorch 를 설치하지 않습니다(`Dockerfile`, CI `docker` 잡이 `import torch` 가 실패하는지 확인).
 
