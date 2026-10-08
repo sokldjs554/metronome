@@ -15,7 +15,7 @@ ETTh1 의 마지막 1년을 시간순으로 재생합니다. 2017-07-02 에 Page
 하나도 실패하지 않습니다(테스트로 고정). [첫 화면](docs/assets/demo/01-ready.png) · [교체 직후](docs/assets/demo/05-after-swap.png) ·
 [모바일](docs/assets/demo/06-mobile.png) · [캡처 보고서](docs/assets/demo/capture-report.json)
 
-**브라우저에서 직접 돌려보기 → [Metronome Replay](https://claude.ai/artifact/WeQtpXKZxByXb2Vd1eyUTU)** — 서버 없이 한 파일로 같은 1년 스트림을 재생합니다.
+**브라우저에서 직접 돌려보기 → [Metronome Replay](https://sokldjs554.github.io/metronome/)** — 서버 없이 한 파일로 같은 1년 스트림을 재생합니다.
 실제 서빙 스택에서 기록한 리플레이(`scripts/record_replay.py`)의 각 버전 DLinear 가중치를 ONNX 에서 꺼내 브라우저가 직접
 예측을 계산하고, 같은 검출기(비율·Page–Hinkley·ADWIN)의 JS 포팅이 같은 날에 경보를 냅니다. 페이지는
 `scripts/build_demo_page.py` 가 기록 JSON 과 오프라인 증거(`static/evidence.json`)로 조립합니다.
@@ -73,7 +73,7 @@ weather 는 <!-- num:artifacts/cadence_summary_extended.json#datasets/weather/ex
 | Python 기반 개발 | 전 모듈 Python, 타입 힌트와 mypy strict(데이터·검출기·캐시·서빙), ruff, pytest, Python 3.11·3.12·3.13 을 CI 가 실행 | `pyproject.toml`, `tests/`, `.github/workflows/ci.yml` |
 | 머신러닝 기본 이론 | 시간순 분할, 정보 누출 차단(해결된 오차만 감시), 고정 척도, 기준 모델(naive·seasonal naive), 시드 반복과 신뢰구간 | `data/splits.py`, `serving/monitor.py`, [reproduction.md](docs/reproduction.md) |
 | 데이터 분석·전처리 경험 | 4개 벤치마크 + M4 100,000 시계열 wide→long, 세 엔진 일치 검사 | `src/metronome/bigdata`, [bigdata.md](docs/bigdata.md) |
-| Git 기반 협업 | 이슈 → 기능 브랜치 → 템플릿을 채운 PR → CI 통과 → merge commit 머지로 진행했습니다([이슈 #1~#4](https://github.com/sokldjs554/metronome/issues?q=is%3Aissue), [PR #5~#8](https://github.com/sokldjs554/metronome/pulls?q=is%3Apr)). 브랜치 간 충돌은 main 병합으로 풀었고, CODEOWNERS·이슈 템플릿·CONTRIBUTING 으로 규칙을 고정했습니다. CI 는 lint · 테스트 3.11/3.12/3.13 · 파이프라인 smoke · Docker · compose 재학습 루프 · 데모 이미지 · TensorFlow · 숫자 대조이고, 운영 워크플로로 Render 점검과 GHCR 이미지 게시가 있습니다. 1인 프로젝트라 다른 사람의 리뷰 이력은 없습니다 | `.github/`, [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Git 기반 협업 | 이슈 → 기능 브랜치 → 템플릿을 채운 PR → CI 통과 → merge commit 머지로 진행했습니다([이슈 #1~#4](https://github.com/sokldjs554/metronome/issues?q=is%3Aissue), [PR #5~#8](https://github.com/sokldjs554/metronome/pulls?q=is%3Apr)). 브랜치 간 충돌은 main 병합으로 풀었고, CODEOWNERS·이슈 템플릿·CONTRIBUTING 으로 규칙을 고정했습니다. CI 는 lint · 테스트 3.11/3.12/3.13 · 파이프라인 smoke · Docker · compose 재학습 루프 · 데모 이미지 · TensorFlow · 숫자 대조이고, 운영 워크플로로 Render 점검, GHCR 이미지 게시, GitHub Pages 데모 배포가 있습니다. 1인 프로젝트라 다른 사람의 리뷰 이력은 없습니다 | `.github/`, [CONTRIBUTING.md](CONTRIBUTING.md) |
 | 문제 해결 중심 소통 | 첫 결과에서 본 결함(이상 구간 재학습이 모델을 망침)과 그 대응(게이트)을 사후 탐색으로 구분해 기록 | [protocol.md 변경 이력](docs/protocol.md#변경-이력), [results.md](docs/results.md) |
 | PyTorch 또는 TensorFlow (우대) | PyTorch 로 모델과 학습 루프를 구현하고, 같은 DLinear 를 TensorFlow/Keras 로도 구현해 가중치 이식 시 출력 일치, 같은 초기값·배치 순서로 함께 학습 시 시험 MSE 차이 0.001% 미만을 확인했습니다(사전 등록 P15) | `src/metronome/models`, `src/metronome/tfmodels.py`, [reproduction.md](docs/reproduction.md#tensorflow-교차-재현-protocol-p15) |
 | MLOps (우대) | 해시·참조 입출력으로 검증하는 파일 레지스트리와 원자적 교체, MLflow(sqlite) 기록, DVC 파이프라인(`dvc dag`: prepare → cache → simulate → report), 승격 게이트 | `serving/registry.py`, `tracking/`, `dvc.yaml`, [ADR 0001](docs/adr/0001-fail-closed-registry.md) |
