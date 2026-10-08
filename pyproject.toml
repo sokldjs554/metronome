@@ -52,7 +52,7 @@ metronome = "metronome.cli:app"
 where = ["src"]
 
 [tool.setuptools.package-data]
-metronome = ["static/*.html", "static/*.css", "static/*.js", "py.typed"]
+metronome = ["static/*.html", "static/*.css", "static/*.js", "static/*.json", "py.typed"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]  # "." so tests can import tests.conftest under the pytest entrypoint (not only python -m pytest)
