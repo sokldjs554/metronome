@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metronome-config
+data:
+  METRONOME_REGISTRY: /registry
+  METRONOME_MAX_EPOCHS: "10"

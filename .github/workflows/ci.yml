@@ -26,8 +26,8 @@ jobs:
       - uses: actions/setup-python@v7
         with: { python-version: "3.12", cache: pip }
       - run: pip install torch --index-url $TORCH_INDEX && pip install -e ".[train,export,dev]"
-      - run: ruff check src tests scripts
-      - run: ruff format --check src tests scripts
+      - run: ruff check src tests scripts dags
+      - run: ruff format --check src tests scripts dags
       - name: mypy (strict modules listed in pyproject)
         run: mypy src/metronome/data src/metronome/drift src/metronome/cadence src/metronome/serving
       - name: dashboard JS parses
@@ -161,6 +161,117 @@ jobs:
       - name: tear down
         if: always()
         run: docker compose down -v
+
+  k8s:
+    # The same two-process deployment on Kubernetes (deploy/k8s): a kind cluster in the job, the two
+    # images built here and loaded into it, the init Job trains v0001 into the PVC, then the replay asks
+    # for a retrain and the worker pod delivers v0002 which the API pod verifies and swaps to.
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - name: build the serving and worker images
+        run: |
+          docker build -f Dockerfile -t metronome-serve:ci .
+          docker build -f Dockerfile.worker -t metronome-worker:ci .
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: metronome
+      - name: load images and apply the manifests
+        run: |
+          kind load docker-image metronome-serve:ci metronome-worker:ci --name metronome
+          kubectl apply -k deploy/k8s/overlays/ci
+          kubectl -n metronome wait --for=condition=complete job/deploy-init --timeout=900s
+          kubectl -n metronome rollout status deploy/api --timeout=300s
+          kubectl -n metronome rollout status deploy/worker --timeout=300s
+          kubectl -n metronome get pods -o wide
+      - name: the API pod serves v0001
+        run: |
+          kubectl -n metronome port-forward svc/api 8000:8000 > /dev/null 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/ready && break; sleep 1; done
+          curl -sf http://127.0.0.1:8000/ready > ready1.json
+          cat ready1.json
+          python3 -c "import json; assert json.load(open('ready1.json'))['model'] == 'v0001'"
+      - name: replay asks for a retrain, the worker pod delivers v0002, the API pod swaps
+        run: |
+          curl -sf -X POST http://127.0.0.1:8000/v1/replay/start -H 'content-type: application/json' -d '{"schedule_days": 2}'
+          curl -sf -X POST http://127.0.0.1:8000/v1/replay/step -H 'content-type: application/json' -d '{"steps": 96}' | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['retrain_requests'] and 'error' not in d['retrain_requests'][0], d; print(d['position'])"
+          for i in $(seq 1 120); do
+            m=$(curl -sf http://127.0.0.1:8000/ready | python3 -c "import sys,json; print(json.load(sys.stdin)['model'])" || true)
+            [ "$m" = "v0002" ] && break
+            sleep 3
+          done
+          curl -sf http://127.0.0.1:8000/ready | python3 -c "import sys,json; assert json.load(sys.stdin)['model'] == 'v0002'"
+          curl -sf http://127.0.0.1:8000/v1/events | python3 -c "import sys,json; e=json.load(sys.stdin); assert e['swaps'][-1]['to'] == 'v0002', e"
+      - name: cluster state and pod logs
+        if: failure()
+        run: |
+          kubectl -n metronome get all,pvc -o wide
+          kubectl -n metronome describe pods | tail -n 80
+          kubectl -n metronome logs job/deploy-init --tail=50 || true
+          kubectl -n metronome logs deploy/api --all-containers --tail=100 || true
+          kubectl -n metronome logs deploy/worker --all-containers --tail=100 || true
+
+  airflow:
+    # The weekly retrain-with-gate policy as an Airflow DAG (dags/metronome_retrain.py), run end to end
+    # with `airflow dags test` against a live demo API: candidate trained and registered by the worker
+    # code with activation off, the gate compares it with the champion, and only a better candidate is
+    # promoted through the API. Both outcomes are valid; the job checks the decision was made and acted on.
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      AIRFLOW_HOME: ${{ github.workspace }}/.airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DAGS_FOLDER: ${{ github.workspace }}/dags
+      METRONOME_REGISTRY: ${{ github.workspace }}/registry/etth1
+      METRONOME_API_URL: http://127.0.0.1:8000
+      METRONOME_MAX_EPOCHS: "2"
+      METRONOME_GATE_LOG: ${{ github.workspace }}/gate.json
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: "3.12", cache: pip }
+      - name: install metronome (training extras) and Airflow with its constraints
+        run: |
+          pip install torch --index-url $TORCH_INDEX
+          pip install -e ".[train,export]"
+          pip install "apache-airflow==2.10.5" --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.12.txt"
+      - name: the DAG imports cleanly
+        run: |
+          airflow db migrate > /dev/null
+          airflow dags list-import-errors
+          [ "$(airflow dags list-import-errors -o json)" = "[]" ] || { echo "::error::DAG import errors"; exit 1; }
+          airflow dags list | grep metronome_weekly_retrain
+      - name: a live demo API (v0001) with a replayed stream
+        run: |
+          metronome prepare etth1
+          metronome deploy-init etth1 --registry "$METRONOME_REGISTRY" --threads 2 --max-epochs 2
+          nohup metronome serve --registry "$METRONOME_REGISTRY" --host 127.0.0.1 --port 8000 > serve.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/ready && break; sleep 1; done
+          # no scheduled retrain inside the replay: the DAG decides when to retrain
+          curl -sf -X POST http://127.0.0.1:8000/v1/replay/start -H 'content-type: application/json' -d '{}'
+          curl -sf -X POST http://127.0.0.1:8000/v1/replay/step -H 'content-type: application/json' -d '{"steps": 240}' > /dev/null
+          curl -sf http://127.0.0.1:8000/v1/monitor | python3 -c "import sys,json; m=json.load(sys.stdin); print('champion', m['active_version'], 'rolling_7d_mae', m['rolling_7d_mae'], 'resolved', m['resolved_forecasts'])"
+      - name: run the DAG end to end
+        run: |
+          airflow dags test metronome_weekly_retrain 2026-10-06
+          cat gate.json
+          python3 - <<'PY'
+          import json, os, urllib.request
+          d = json.load(open(os.environ["METRONOME_GATE_LOG"]))
+          ready = json.load(urllib.request.urlopen("http://127.0.0.1:8000/ready"))
+          expected = d["candidate"] if d["promote"] else d["champion"]
+          assert ready["model"] == expected, (ready, d)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(f"### airflow gate: promote={d['promote']}\n\n`{d['champion']}` {d['champion_mae']:.4f} ({d['champion_mae_source']}) vs candidate `{d['candidate']}` {d['candidate_val_mae']:.4f}; serving `{ready['model']}`\n")
+          PY
+      - name: logs
+        if: failure()
+        run: |
+          tail -n 50 serve.log || true
+          find .airflow/logs -name "*.log" | head -20 | xargs -I{} sh -c 'echo "== {}"; tail -n 40 "{}"' || true
 
   tensorflow:
     # Keras DLinear vs PyTorch DLinear: identical outputs after weight transfer, and lockstep training

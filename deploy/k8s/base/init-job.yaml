@@ -1,0 +1,38 @@
+# Once per registry: download the pinned ETTh1 source and train v0001 into the volume (the compose
+# `init` service). A second run on an initialised registry is a no-op.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: deploy-init
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: init
+          image: ghcr.io/sokldjs554/metronome-worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - |
+              if [ -f "$METRONOME_REGISTRY/ACTIVE" ]; then
+                echo "registry already initialised: $(cat "$METRONOME_REGISTRY/ACTIVE")"
+              else
+                metronome prepare etth1 &&
+                metronome deploy-init etth1 --registry "$METRONOME_REGISTRY" --threads 2 --max-epochs "$METRONOME_MAX_EPOCHS"
+              fi
+          envFrom:
+            - configMapRef:
+                name: metronome-config
+          volumeMounts:
+            - name: registry
+              mountPath: /registry
+      volumes:
+        - name: registry
+          persistentVolumeClaim:
+            claimName: registry

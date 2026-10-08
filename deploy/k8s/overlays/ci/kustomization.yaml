@@ -1,0 +1,20 @@
+# CI on kind: images built in the job and loaded into the cluster, two training epochs.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: ghcr.io/sokldjs554/metronome-serve
+    newName: metronome-serve
+    newTag: ci
+  - name: ghcr.io/sokldjs554/metronome-worker
+    newName: metronome-worker
+    newTag: ci
+patches:
+  - target:
+      kind: ConfigMap
+      name: metronome-config
+    patch: |-
+      - op: replace
+        path: /data/METRONOME_MAX_EPOCHS
+        value: "2"

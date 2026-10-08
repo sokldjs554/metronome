@@ -36,6 +36,7 @@ class WorkerConfig:
     seed: int = 0
     threads: int = 1
     poll_seconds: float = 2.0
+    activate: bool = True  # False: register only; something else (a gate) decides about promotion
 
 
 def train_replacement(
@@ -160,7 +161,9 @@ def process_job(cfg: WorkerConfig, job_path: Path) -> dict[str, Any]:
         cfg.registry_root / "work" / job["job_id"],
     )
     activation: dict[str, Any]
-    if cfg.api_url:
+    if not cfg.activate:
+        activation = {"skipped": True, "reason": "activation left to the caller"}
+    elif cfg.api_url:
         headers = {"X-API-Key": cfg.api_key} if cfg.api_key else {}
         resp = httpx.post(
             f"{cfg.api_url}/v1/models/{version}/activate",

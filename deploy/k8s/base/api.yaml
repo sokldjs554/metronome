@@ -1,0 +1,74 @@
+# The serving API: ONNX Runtime only, no PyTorch in the image. Ready only after the registry holds a
+# verified active version, so the Service sends traffic to nothing until v0001 exists.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels: { app: api }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: api }
+  template:
+    metadata:
+      labels: { app: api }
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      initContainers:
+        - name: wait-for-registry
+          image: ghcr.io/sokldjs554/metronome-serve:latest
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until [ -f /registry/ACTIVE ]; do echo 'waiting for deploy-init'; sleep 3; done"]
+          volumeMounts:
+            - name: registry
+              mountPath: /registry
+      containers:
+        - name: api
+          image: ghcr.io/sokldjs554/metronome-serve:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: PORT
+              value: "8000"
+            - name: METRONOME_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: metronome-api
+                  key: api-key
+                  optional: true
+          envFrom:
+            - configMapRef:
+                name: metronome-config
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - name: registry
+              mountPath: /registry
+      volumes:
+        - name: registry
+          persistentVolumeClaim:
+            claimName: registry
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  selector: { app: api }
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

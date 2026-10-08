@@ -228,3 +228,23 @@ def test_replay_page_is_served_only_when_bundled(
     r = TestClient(create_app(deployment["root"], threads=1)).get("/replay")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
     assert "Metronome Replay" in r.text
+
+
+def test_worker_can_register_without_activating(deployment: dict) -> None:
+    """activate=False (the Airflow gate's mode): the candidate is exported, verified and registered,
+    but ACTIVE still names the champion until someone decides to promote it."""
+    root: Path = deployment["root"]
+    reg = Registry(root)
+    before, versions_before = reg.active(), set(reg.list_versions())
+    job = reg.request_retrain({"trigger": "airflow-weekly", "cutoff_row": None, "active_version": before})
+    cfg = WorkerConfig(
+        registry_root=root, stream_path=root / "stream.npz", max_epochs=1, threads=1, activate=False
+    )
+    done = {d["job"]: d for d in run_worker(cfg, once=True)}  # earlier tests may have left jobs pending
+    assert job.stem in done, done
+    candidate = done[job.stem]["version"]
+    assert candidate not in versions_before and candidate in reg.list_versions()
+    assert done[job.stem]["activation"] == {"skipped": True, "reason": "activation left to the caller"}
+    assert reg.active() == before
+    assert reg.manifest(candidate)["metrics"]["val_mae_fixed"] > 0
+    assert not reg.pending_jobs()

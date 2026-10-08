@@ -1,0 +1,12 @@
+# The registry: versions/, ACTIVE pointer and jobs/ shared by the API (writes ACTIVE and jobs/) and
+# the worker (writes versions/). ReadWriteOnce is enough while both pods land on one node; on a
+# multi-node cluster use a ReadWriteMany class (NFS, Azure Files) or pin both to one node.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
