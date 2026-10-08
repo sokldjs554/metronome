@@ -126,4 +126,6 @@ metronome worker --registry registry/etth1  # 다른 터미널: 재학습 job �
 ## 주장하지 않는 것
 
 실제 고객·설비 데이터, 금액으로 환산한 재학습 비용, 다중 노드 클러스터, AWS·GCP 운영, 다인 협업 이력, 운영 SLA.
+Airflow 같은 오케스트레이터, Kubernetes, Terraform 류의 IaC 도 쓰지 않았습니다. 질문이 "언제 재학습하는가"였고 그 답을 검증하는 데는
+GitHub Actions 와 compose 로 충분했기 때문이며, 같은 감시 → 재학습 → 교체 루프를 그 도구 위에 올리는 것은 다음 단계로 남겼습니다.
 자세한 조건은 [docs/limitations.md](docs/limitations.md) 에 있습니다. 데이터의 권리는 각 제공자에게 있으며 코드는 MIT 입니다.

@@ -1,9 +1,9 @@
 {
-  "url": "http://127.0.0.1:8000",
-  "started": "2026-10-06T07:17:59Z",
+  "url": "http://127.0.0.1:8765",
+  "started": "2026-10-08T09:44:16Z",
   "first_version": "v0001",
   "03-retrain-requested.png": {
-    "job": "20261006T071805Z-504",
+    "job": "20261008T094423Z-072",
     "trigger": "detector",
     "alarms": [
       {
@@ -20,12 +20,12 @@
     "active_version": "v0001"
   },
   "swap": {
-    "at": 1791271095.4352946,
+    "at": 1791452688.588358,
     "from": "v0001",
     "to": "v0002",
     "reason": "worker"
   },
-  "steps_to_swap": 39,
+  "steps_to_swap": 81,
   "swapped": true,
   "monitor": {
     "active_version": "v0002",
@@ -213,12 +213,12 @@
   "models": {
     "active": {
       "version": "v0002",
-      "created_at": "2026-10-06T07:18:15Z",
+      "created_at": "2026-10-08T09:44:47Z",
       "metrics": {
         "val_mae_fixed": 0.374260276556015,
         "val_mse_standardized": 0.2714388370513916,
         "epochs": 10,
-        "train_seconds": 9.565506717000062,
+        "train_seconds": 16.20206932400015,
         "n_train_windows": 8138,
         "state_sha256": "a2180b1dfb951e4ce8b126bc00bd4ffadd655999498f2d69583b1393335464e5",
         "export_parity_max_abs_diff": 7.152557373046875e-07
@@ -226,7 +226,7 @@
       "onnx_sha256": "9be2dc0b3dcfcbc5956d441779413234bca3d263d69ce2cd05babba706f83c5a",
       "parity_max_abs_diff": 7.152557373046875e-07,
       "provenance": {
-        "job_id": "20261006T071805Z-504",
+        "job_id": "20261008T094423Z-072",
         "trigger": "detector",
         "cutoff_row": 8905,
         "cutoff_time": "2017-07-07T00:00:00.000000000",
@@ -236,18 +236,18 @@
         ],
         "model": "dlinear",
         "seed": 0,
-        "stream_file": "/home/user/chartwire/metronome/registry/etth1/stream.npz"
+        "stream_file": "/tmp/claude-0/-home-user/f117b594-e568-5d33-93bc-15973c2b71c0/scratchpad/demo-registry/etth1/stream.npz"
       }
     },
     "versions": [
       {
         "version": "v0001",
-        "created_at": "2026-10-06T07:17:56Z",
+        "created_at": "2026-10-08T09:44:01Z",
         "metrics": {
           "val_mae_fixed": 0.34715014696121216,
           "val_mse_standardized": 0.2537443935871124,
           "epochs": 8,
-          "train_seconds": 11.35698501600018,
+          "train_seconds": 13.085134965999941,
           "n_train_windows": 7897,
           "state_sha256": "8ccce2e96169b01aef0029603ffdd3d330e4aed1529b25c81618dd6e5871ccf1",
           "export_parity_max_abs_diff": 5.960464477539062e-07
@@ -268,18 +268,18 @@
       },
       {
         "version": "v0002",
-        "created_at": "2026-10-06T07:18:15Z",
+        "created_at": "2026-10-08T09:44:47Z",
         "metrics": {
           "val_mae_fixed": 0.374260276556015,
           "val_mse_standardized": 0.2714388370513916,
           "epochs": 10,
-          "train_seconds": 9.565506717000062,
+          "train_seconds": 16.20206932400015,
           "n_train_windows": 8138,
           "state_sha256": "a2180b1dfb951e4ce8b126bc00bd4ffadd655999498f2d69583b1393335464e5",
           "export_parity_max_abs_diff": 7.152557373046875e-07
         },
         "provenance": {
-          "job_id": "20261006T071805Z-504",
+          "job_id": "20261008T094423Z-072",
           "trigger": "detector",
           "cutoff_row": 8905,
           "cutoff_time": "2017-07-07T00:00:00.000000000",
@@ -289,7 +289,7 @@
           ],
           "model": "dlinear",
           "seed": 0,
-          "stream_file": "/home/user/chartwire/metronome/registry/etth1/stream.npz"
+          "stream_file": "/tmp/claude-0/-home-user/f117b594-e568-5d33-93bc-15973c2b71c0/scratchpad/demo-registry/etth1/stream.npz"
         },
         "onnx_sha256": "9be2dc0b3dcfcbc5956d441779413234bca3d263d69ce2cd05babba706f83c5a"
       }
