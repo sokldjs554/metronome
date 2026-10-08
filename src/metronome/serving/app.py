@@ -413,6 +413,16 @@ def create_app(
         def index(_: Request) -> FileResponse:
             return FileResponse(STATIC / "index.html")
 
+    # ---- self-contained browser replay (docs/demo), bundled only into the public demo image ------
+    replay_page = os.environ.get("METRONOME_REPLAY_PAGE")
+
+    @app.get("/replay", include_in_schema=False)
+    def replay_page_route() -> FileResponse:
+        path = Path(replay_page) if replay_page else None
+        if path is None or not path.is_file():
+            raise HTTPException(status_code=404, detail="replay page is not bundled in this image")
+        return FileResponse(path, media_type="text/html; charset=utf-8")
+
     return app
 
 
