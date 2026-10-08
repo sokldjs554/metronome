@@ -91,4 +91,4 @@ curl -s $BASE/ready                                       # model 이 v0001 인�
 - 컨테이너 파일 시스템은 재시작·재배포 때 초기화됩니다. 그래서 운영 중에 재학습한 버전은 사라지고 이미지에 구운 v0001 로 돌아갑니다.
   버전을 남기려면 유료 영구 디스크를 레지스트리 경로(`METRONOME_REGISTRY`)에 붙여야 합니다.
 - `METRONOME_API_KEY` 를 비워 두면 누구나 리플레이를 시작하고 모델을 활성화할 수 있습니다. 키를 넣으면 활성화·재적재·리플레이 시작이 보호됩니다.
-- AWS·GCP 에서는 운영하지 않았습니다. 이미지와 compose 는 어느 컨테이너 플랫폼에서도 같은 방식으로 돌아갑니다.
+- 같은 이미지가 compose, kind(Kubernetes), Azure Container Apps, Render 에서 같은 방식으로 돌아갑니다.
