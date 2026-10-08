@@ -9,6 +9,7 @@ https://metronome-demo.onrender.com, 싱가포르 리전, 2026-10-08 배포)이�
 | 무엇 | 어떻게 | 확인 |
 |---|---|---|
 | 서버 데모 | Render Blueprint 가 `render.yaml` 을 읽어 `Dockerfile.demo` 를 빌드합니다. 빌드 중에 고정 해시의 ETTh1 을 내려받아 v0001 을 학습합니다. main 에 머지되면 Render 가 다시 빌드합니다 | `cloud-smoke` 워크플로 |
+| 서버 데모 (Azure) | main 에 데모 관련 변경이 머지되면 `azure` 워크플로가 `Dockerfile.demo` 를 GHCR 에 `metronome-demo:sha-<커밋>` 으로 게시하고, 키 없는 OIDC 로그인(저장소 Secret `AZURE_CLIENT_ID`·`AZURE_TENANT_ID`·`AZURE_SUBSCRIPTION_ID`, main 브랜치의 Actions 만 허용)으로 Azure Container Apps(`metronome-rg` / `metronome-env`, 한국 중부)의 `metronome-demo` 앱을 그 이미지로 갱신합니다. 그다음 100% 트래픽을 받는 리비전이 그 이미지로 건강한지 확인하고, 공개 주소에 `cloud-smoke` 와 같은 점검을 돌립니다. 요청이 없으면 0대로 줄어듭니다 | `azure` 워크플로 요약의 주소와 점검 표 |
 | 이미지 | main 에 코드·이미지 변경이 머지되면 `images` 워크플로가 서빙·worker 이미지를 GHCR 에 `sha-<커밋>` 과 `latest` 로 게시합니다 | 워크플로 요약의 이미지 이름 |
 | 브라우저 리플레이 | main 의 `docs/demo/metronome-replay.html` 이 바뀌면 `pages` 워크플로가 GitHub Pages(https://sokldjs554.github.io/metronome/)에 배포하고, 공개 주소가 페이지를 내주는지 확인합니다. 서버가 없어 Render 와 무관하게 열립니다 | `pages` 워크플로 요약의 live 주소 |
 | 두 컨테이너 | `docker compose run --rm init` 후 `docker compose up api worker`. CI 의 `compose` 잡이 같은 절차를 매번 실행합니다 | `/ready`, `/v1/events` |
@@ -49,7 +50,8 @@ curl -s -X POST $BASE/v1/models/v0001/activate -H "x-api-key: $METRONOME_API_KEY
 curl -s $BASE/ready                                       # model 이 v0001 인지
 ```
 
-**코드 롤백.** Render 대시보드의 Deploys 에서 이전 배포를 Rollback 합니다. 두 컨테이너 구성은 이미지 태그를 이전 커밋의
+**코드 롤백.** Render 는 대시보드의 Deploys 에서 이전 배포를 Rollback 합니다. Azure 는 Actions → azure → Run workflow 에 이전 커밋의
+`sha-<커밋>` 태그를 넣어 실행하면 빌드 없이 그 이미지로 새 리비전을 만들어 전환합니다. 두 컨테이너 구성은 이미지 태그를 이전 커밋의
 `sha-<커밋>` 으로 고정해 다시 올립니다.
 
 ## 장애 대응
