@@ -21,5 +21,9 @@ RUN metronome prepare etth1 \
     && metronome deploy-init etth1 --registry /app/registry/etth1 --threads 2 --max-epochs 10 \
     && rm -rf data/raw
 
+# The self-contained browser replay (scripts/build_demo_page.py from a recorded replay) at /replay.
+COPY docs/demo/metronome-replay.html /app/replay.html
+ENV METRONOME_REPLAY_PAGE=/app/replay.html
+
 EXPOSE 8000
 CMD ["sh", "-c", "metronome demo --registry \"$METRONOME_REGISTRY\" --host 0.0.0.0 --port \"$PORT\""]
