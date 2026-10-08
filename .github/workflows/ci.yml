@@ -193,4 +193,4 @@ jobs:
       - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - name: every number quoted in README/docs must match the artifact it cites
-        run: python scripts/check_numbers.py --require-markers README.md docs/results.md docs/reproduction.md docs/serving.md docs/bigdata.md
+        run: python scripts/check_numbers.py --require-markers README.md docs/results.md docs/reproduction.md docs/serving.md docs/bigdata.md docs/model_search.md
