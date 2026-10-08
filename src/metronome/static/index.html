@@ -12,7 +12,7 @@
     <span class="logo" aria-hidden="true">◔</span>
     <div>
       <h1>Metronome</h1>
-      <p class="tagline">배포된 시계열 예측 모델을 <strong>언제 다시 학습할지</strong> 데이터로 정하는 non-stop 파이프라인</p>
+      <p class="tagline">데이터 연결 → 모델 비교 → 원클릭 배포 → 오차 감시 → <strong>언제 다시 학습할지</strong>까지 한 화면에서</p>
     </div>
   </div>
   <div class="chips" id="status-chips">
@@ -22,57 +22,173 @@
   </div>
 </header>
 
-<p class="notice" id="notice">공개 데이터(ETT 등)를 시간순으로 재생하는 체험입니다. 실제 설비·고객 데이터가 아니며, 재학습은 별도 worker 프로세스가 수행하고 API 는 검증을 통과한 모델만 교체합니다.</p>
+<nav class="steps" id="steps" aria-label="단계">
+  <button class="step active" data-panel="data"><span class="n">1</span>데이터</button>
+  <button class="step" data-panel="models"><span class="n">2</span>모델 비교</button>
+  <button class="step" data-panel="deploy"><span class="n">3</span>배포</button>
+  <button class="step" data-panel="monitor"><span class="n">4</span>감시 · 재학습</button>
+  <button class="step" data-panel="policy"><span class="n">5</span>재학습 정책</button>
+</nav>
 
-<main class="grid">
-  <section class="card" id="card-model">
-    <h2>01 · 지금 서비스 중인 모델</h2>
-    <dl class="kv" id="model-kv"><dt>버전</dt><dd>—</dd></dl>
-    <h3>교체 이력</h3>
-    <ol class="events" id="swap-events"><li class="muted">아직 교체가 없습니다.</li></ol>
-  </section>
+<p class="notice" id="notice">공개 데이터 ETTh1(변압기 부하·유온, 1시간 간격)을 시간순으로 재생합니다. 학습은 worker 가 하고, API 는 해시와 참조 입출력을 다시 검증한 모델만 교체합니다. 모든 버튼은 실제 API 를 호출합니다.</p>
 
-  <section class="card" id="card-monitor">
-    <h2>02 · 오차 감시</h2>
-    <div class="gauge-row">
-      <div class="stat"><span class="label">최근 7일 MAE</span><span class="value" id="stat-rolling">—</span></div>
-      <div class="stat"><span class="label">배포 시 검증 MAE</span><span class="value" id="stat-baseline">—</span></div>
-      <div class="stat"><span class="label">해결된 예측</span><span class="value" id="stat-resolved">—</span></div>
-      <div class="stat"><span class="label">대기 중 재학습</span><span class="value" id="stat-jobs">—</span></div>
-    </div>
-    <table class="detectors" id="detectors"><thead><tr><th>검출기</th><th>통계량</th><th>임계값</th><th>상태</th></tr></thead><tbody></tbody></table>
-    <figure>
-      <svg id="chart-daily" viewBox="0 0 640 240" role="img" aria-label="일별 MAE 추이"></svg>
-      <figcaption>일별 MAE(초기 학습 구간 표준편차 단위). 색은 그날 예측한 모델 버전, ▲는 검출기 경보.</figcaption>
-    </figure>
-  </section>
+<main>
+<!-- 1 · 데이터 -->
+<section class="panel active" id="panel-data">
+  <div class="grid">
+    <section class="card" id="card-dataset">
+      <h2>데이터 출처와 검사</h2>
+      <p class="muted">고정된 원본(URL + SHA-256)을 내려받아 스키마 검사를 통과한 것만 Parquet 으로 저장합니다. 학습은 초기 구간, 평가와 재학습은 그 뒤의 스트림 구간에서만 일어납니다.</p>
+      <dl class="kv" id="dataset-kv"><dt>데이터셋</dt><dd>—</dd></dl>
+      <h3>검사 결과</h3>
+      <table id="validation-table"><thead><tr><th>검사</th><th class="num">건수</th><th>상태</th></tr></thead><tbody></tbody></table>
+    </section>
 
-  <section class="card" id="card-replay">
-    <h2>03 · 스트림 재생</h2>
-    <p class="muted">기록된 데이터를 시간순으로 흘려보냅니다. 매 시각 예측 → 실제값 도착 → 오차 해결 → 검출기 판단 → (필요 시) 재학습 요청 → worker 가 새 버전 등록 → 무중단 교체.</p>
-    <div class="controls">
-      <label>주기 재학습(일) <input id="schedule-days" type="number" min="0" value="0" title="0 = 검출기만 사용"></label>
-      <button id="btn-start">리플레이 시작</button>
-      <button id="btn-step1" disabled>+1일</button>
-      <button id="btn-step7" disabled>+7일</button>
-      <button id="btn-step30" disabled>+30일</button>
-      <button id="btn-auto" disabled>자동 재생</button>
-    </div>
-    <div class="progress"><div id="progress-bar"></div></div>
-    <p class="muted" id="replay-pos">리플레이가 시작되지 않았습니다.</p>
-    <ol class="events" id="retrain-events"><li class="muted">재학습 요청이 없습니다.</li></ol>
-  </section>
+    <section class="card" id="card-channels">
+      <h2>채널 요약</h2>
+      <figure>
+        <svg id="chart-spark" viewBox="0 0 640 220" role="img" aria-label="채널별 추이"></svg>
+        <figcaption id="spark-caption">채널마다 0–1 로 정규화한 구간 평균. 점선 왼쪽은 초기 학습 구간, 오른쪽은 재생되는 스트림 구간.</figcaption>
+      </figure>
+      <table id="channel-table"><thead><tr><th>채널</th><th class="num">평균</th><th class="num">표준편차</th><th class="num">최소</th><th class="num">최대</th><th class="num">결측</th></tr></thead><tbody></tbody></table>
+    </section>
 
-  <section class="card wide" id="card-evidence">
-    <h2>04 · 재학습 정책 실험 (오프라인, 사전 등록 프로토콜)</h2>
-    <p class="muted" id="evidence-note">artifacts/cadence 의 결과를 요약합니다. 수치는 저장소의 JSON 과 CI 의 숫자 검사로 대조됩니다.</p>
-    <div class="pareto-grid" id="pareto-grid"></div>
-    <table class="results" id="results-table"><thead><tr><th>데이터셋</th><th>never</th><th>periodic-7</th><th>periodic-1</th><th>대표 감시 정책</th><th>재학습 횟수</th></tr></thead><tbody></tbody></table>
-  </section>
+    <section class="card wide" id="card-upload">
+      <h2>내 CSV 검사해 보기</h2>
+      <p class="muted">첫 열(또는 timestamp/date 열)이 시각, 나머지 열이 숫자인 CSV 를 올리면 같은 파이프라인의 검사(중복·역행·간격·결측·상수 채널)를 돌려 결과를 돌려줍니다. 파일은 저장하지 않습니다. 5 MB 까지.</p>
+      <form class="controls" id="upload-form">
+        <input type="file" id="upload-file" accept=".csv,text/csv" required>
+        <label>주기 <input id="upload-freq" type="text" value="1h" title="polars 기간 문자열: 1h, 15m, 1d"></label>
+        <button type="submit" id="btn-upload">검사 실행</button>
+        <button type="button" class="secondary" id="btn-sample">예시 CSV 받기</button>
+      </form>
+      <div id="upload-result" class="muted">아직 올린 파일이 없습니다.</div>
+    </section>
+  </div>
+</section>
+
+<!-- 2 · 모델 비교 -->
+<section class="panel" id="panel-models">
+  <div class="grid">
+    <section class="card" id="card-leaderboard">
+      <h2>모델 계열 비교 (같은 분할, 오프라인)</h2>
+      <p class="muted" id="leaderboard-note">—</p>
+      <figure><svg id="chart-leaderboard" viewBox="0 0 640 200" role="img" aria-label="모델별 시험 MSE"></svg></figure>
+      <table id="leaderboard-table"><thead><tr><th>모델</th><th class="num">시험 MSE</th><th class="num">시험 MAE</th><th class="num">파라미터</th><th class="num">에포크</th><th class="num">학습(s)</th><th class="num">시드</th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <section class="card" id="card-candidates">
+      <h2>후보 학습 → 게이트 → 승격 (실시간)</h2>
+      <p class="muted">고른 계열로 지금 스트림 시점까지의 데이터에서 후보를 학습해 등록만 합니다. 게이트는 후보의 검증 MAE 가 현재 모델(최근 7일 MAE, 없으면 배포 시 검증 MAE)보다 낮을 때만 승격합니다.</p>
+      <div class="controls">
+        <label>계열 <select id="cand-model"><option value="linear">Linear</option><option value="nlinear">NLinear</option><option value="dlinear" selected>DLinear</option><option value="patchtst">PatchTST</option></select></label>
+        <label>최대 에포크 <input id="cand-epochs" type="number" min="1" max="50" value="5"></label>
+        <button id="btn-candidate">후보 학습</button>
+        <span class="muted" id="cand-status"></span>
+      </div>
+      <dl class="kv" id="champion-kv"><dt>현재 모델</dt><dd>—</dd></dl>
+      <table id="candidates-table"><thead><tr><th>작업</th><th>계열</th><th>상태</th><th>버전</th><th class="num">검증 MAE</th><th class="num">학습(s)</th><th>게이트</th><th></th></tr></thead><tbody></tbody></table>
+    </section>
+  </div>
+</section>
+
+<!-- 3 · 배포 -->
+<section class="panel" id="panel-deploy">
+  <div class="grid">
+    <section class="card" id="card-model">
+      <h2>지금 서비스 중인 모델</h2>
+      <dl class="kv" id="model-kv"><dt>버전</dt><dd>—</dd></dl>
+      <div class="controls">
+        <button class="secondary" id="btn-rollback">이전 버전으로 롤백</button>
+        <a class="button-link" id="link-card" href="#" target="_blank" rel="noopener">모델 카드 열기</a>
+      </div>
+      <h3>교체 이력</h3>
+      <ol class="events" id="swap-events"><li class="muted">아직 교체가 없습니다.</li></ol>
+    </section>
+
+    <section class="card wide" id="card-versions">
+      <h2>버전과 원클릭 전환</h2>
+      <p class="muted">활성화를 누르면 서비스가 해시와 참조 입출력을 다시 검증한 뒤 포인터만 바꿉니다. 검증에 실패하면 거부하고 현재 모델을 유지합니다.</p>
+      <table id="versions-table"><thead><tr><th>버전</th><th>계열</th><th>계기</th><th class="num">검증 MAE</th><th class="num">parity</th><th>등록</th><th></th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <section class="card wide" id="card-forecast">
+      <h2>예측 호출</h2>
+      <div class="controls">
+        <label>채널 <select id="fc-channel"></select></label>
+        <button id="btn-forecast">지금 시점에서 예측</button>
+        <span class="muted" id="fc-status">스트림의 현재 시점에서 과거 lookback 을 보내고 다음 horizon 을 받습니다.</span>
+      </div>
+      <figure>
+        <svg id="chart-forecast" viewBox="0 0 640 240" role="img" aria-label="예측과 실제"></svg>
+        <figcaption>실선: 과거 실제값, 굵은 선: 모델 예측, 점선: 그 뒤 실제값(리플레이가 켜져 있을 때).</figcaption>
+      </figure>
+      <h3>호출 예</h3>
+      <pre class="code" id="curl-example">—</pre>
+    </section>
+  </div>
+</section>
+
+<!-- 4 · 감시 · 재학습 -->
+<section class="panel" id="panel-monitor">
+  <div class="grid">
+    <section class="card" id="card-monitor">
+      <h2>오차 감시</h2>
+      <div class="gauge-row">
+        <div class="stat"><span class="label">최근 7일 MAE</span><span class="value" id="stat-rolling">—</span></div>
+        <div class="stat"><span class="label">배포 시 검증 MAE</span><span class="value" id="stat-baseline">—</span></div>
+        <div class="stat"><span class="label">해결된 예측</span><span class="value" id="stat-resolved">—</span></div>
+        <div class="stat"><span class="label">대기 중 재학습</span><span class="value" id="stat-jobs">—</span></div>
+      </div>
+      <table class="detectors" id="detectors"><thead><tr><th>검출기</th><th>통계량</th><th>임계값</th><th>상태</th></tr></thead><tbody></tbody></table>
+      <figure>
+        <svg id="chart-daily" viewBox="0 0 640 240" role="img" aria-label="일별 MAE 추이"></svg>
+        <figcaption>일별 MAE(초기 학습 구간 표준편차 단위). 색은 그날 예측한 모델 버전, ▲는 검출기 경보.</figcaption>
+      </figure>
+    </section>
+
+    <section class="card" id="card-replay">
+      <h2>스트림 재생</h2>
+      <p class="muted">기록된 데이터를 시간순으로 흘려보냅니다. 매 시각 예측 → 실제값 도착 → 오차 해결 → 검출기 판단 → (필요 시) 재학습 요청 → worker 가 새 버전 등록 → 검증 후 무중단 교체.</p>
+      <div class="controls">
+        <label>주기 재학습(일) <input id="schedule-days" type="number" min="0" value="0" title="0 = 검출기만 사용"></label>
+        <button id="btn-start">리플레이 시작</button>
+        <button id="btn-step1" disabled>+1일</button>
+        <button id="btn-step7" disabled>+7일</button>
+        <button id="btn-step30" disabled>+30일</button>
+        <button id="btn-auto" disabled>자동 재생</button>
+      </div>
+      <div class="progress"><div id="progress-bar"></div></div>
+      <p class="muted" id="replay-pos">리플레이가 시작되지 않았습니다.</p>
+      <ol class="events" id="retrain-events"><li class="muted">재학습 요청이 없습니다.</li></ol>
+    </section>
+  </div>
+</section>
+
+<!-- 5 · 재학습 정책 -->
+<section class="panel" id="panel-policy">
+  <div class="grid">
+    <section class="card wide" id="card-recommend">
+      <h2>이 데이터에 맞는 재학습 정책</h2>
+      <div id="policy-recommend" class="muted">—</div>
+      <div class="controls">
+        <button id="btn-policy-detector">검출기 기반으로 재생</button>
+        <button class="secondary" id="btn-policy-weekly">주 1회 재학습으로 재생</button>
+        <button class="secondary" id="btn-policy-never">재학습 없이 재생</button>
+      </div>
+    </section>
+    <section class="card wide" id="card-evidence">
+      <h2>재학습 정책 실험 (오프라인, 사전 등록 프로토콜)</h2>
+      <p class="muted" id="evidence-note">artifacts/cadence 의 결과를 요약합니다. 수치는 저장소의 JSON 과 CI 의 숫자 검사로 대조됩니다.</p>
+      <div class="pareto-grid" id="pareto-grid"></div>
+      <table class="results" id="results-table"><thead><tr><th>데이터셋</th><th>never</th><th>periodic-7</th><th>periodic-1</th><th>대표 감시 정책</th><th>재학습 횟수</th></tr></thead><tbody></tbody></table>
+    </section>
+  </div>
+</section>
 </main>
 
 <footer class="foot">
-  <a href="/docs">OpenAPI</a> · <a href="/metrics">Prometheus</a> · <a href="/v1/monitor">monitor JSON</a> · <span id="foot-version"></span>
+  <a href="/docs">OpenAPI</a> · <a href="/metrics">Prometheus</a> · <a href="/v1/monitor">monitor JSON</a> · <a href="/replay">브라우저 리플레이</a> · <span id="foot-version"></span>
 </footer>
 <script src="/static/app.js"></script>
 </body>

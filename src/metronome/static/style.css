@@ -67,3 +67,32 @@ button.secondary { background: var(--card); color: var(--accent); border: 1px so
 .foot { max-width: 1200px; margin: 0 auto; padding: 8px 16px 32px; color: var(--muted); font-size: 13px; }
 .foot a { color: var(--accent); }
 @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } h1 { font-size: 22px; } .stat .value { font-size: 17px; } }
+
+/* ---- five-step workbench ---- */
+.steps { max-width: 1200px; margin: 6px auto 0; padding: 0 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+.step { background: var(--card); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px 6px 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.step .n { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; align-items: center; justify-content: center; background: var(--bg); color: var(--muted); font-size: 12px; font-weight: 700; }
+.step.active { color: var(--accent); border-color: var(--accent); }
+.step.active .n { background: var(--accent); color: #fff; }
+.panel { display: none; }
+.panel.active { display: block; }
+main .grid { padding-top: 4px; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid currentColor; }
+.badge.ok { color: var(--ok); }
+.badge.bad { color: var(--warn); }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.problems { margin: 6px 0 10px; padding-left: 18px; color: var(--warn); font-size: 13px; }
+.preview td, .preview th { white-space: nowrap; }
+button.small { padding: 3px 8px; font-size: 12px; border-radius: 6px; }
+.small-link { font-size: 12px; color: var(--accent); margin-left: 4px; }
+.button-link { display: inline-block; background: var(--card); color: var(--accent); border: 1px solid var(--accent); border-radius: 8px; padding: 6px 12px; font-size: 14px; text-decoration: none; }
+.controls select { padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.controls input[type="file"] { max-width: 260px; font-size: 13px; }
+.controls input[type="text"] { width: 64px; }
+.code { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: 12px/1.5 ui-monospace, "SFMono-Regular", Menlo, monospace; overflow-x: auto; white-space: pre; margin: 0; }
+#upload-result table { margin: 6px 0; }
+#policy-recommend p { margin: 0 0 8px; }
+@media (max-width: 640px) { .step { padding: 5px 10px 5px 6px; font-size: 13px; } .controls input[type="file"] { max-width: 100%; } }
+td button, td .small-link, td .badge { white-space: nowrap; }
+#versions-table td, #candidates-table td { white-space: nowrap; }
+@media (max-width: 640px) { .card table { display: block; overflow-x: auto; } }

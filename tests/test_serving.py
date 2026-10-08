@@ -248,3 +248,128 @@ def test_worker_can_register_without_activating(deployment: dict) -> None:
     assert reg.active() == before
     assert reg.manifest(candidate)["metrics"]["val_mae_fixed"] > 0
     assert not reg.pending_jobs()
+
+
+# ---- workbench: data -> model comparison -> deployment -----------------------------------------
+def test_data_profile_describes_the_deployed_dataset(client: TestClient, deployment: dict) -> None:
+    assert (deployment["root"] / "dataset.json").exists(), "deploy-init keeps the dataset manifest"
+    p = client.get("/v1/data/profile").json()
+    assert p["dataset"] == "synth" and p["channels"] == ["ch0", "ch1", "ch2"] and p["freq"] == "1h"
+    assert p["n_rows"] == 24 * 70 and p["split"]["initial_rows"] + p["split"]["stream_rows"] == p["n_rows"]
+    assert p["split"]["stream_days"] == 20 and p["lookback"] == L and p["horizon"] == H
+    stats = {s["name"]: s for s in p["channel_stats"]}
+    assert 9 < stats["ch0"]["mean"] < 20 and stats["ch0"]["missing"] == 0
+    assert len(p["sparklines"]["timestamps"]) == len(p["sparklines"]["values"]) <= 120
+    assert p["validation"]["ok"] is True and p["content_sha256"]
+
+
+def test_csv_check_reports_problems_without_crashing(client: TestClient) -> None:
+    good = "timestamp,a,b\n" + "".join(f"2021-01-01 {h:02d}:00:00,{h},{h * 2}\n" for h in range(24))
+    r = client.post("/v1/data/validate", files={"file": ("good.csv", good.encode(), "text/csv")})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True and body["report"]["n_rows"] == 24 and body["report"]["channels"] == ["a", "b"]
+    assert body["enough_history"]["ok"] is False  # 24 rows is far below lookback + horizon + 14 days
+
+    bad = (
+        "date,a,note\n"
+        "2021-01-01 00:00:00,1,x\n"
+        "2021-01-01 01:00:00,2,y\n"
+        "2021-01-01 01:00:00,2,z\n"  # duplicate
+        "2021-01-01 04:00:00,,w\n"  # gap + missing value
+        "not a date,5,v\n"  # unparseable timestamp
+    )
+    r = client.post("/v1/data/validate", files={"file": ("bad.csv", bad.encode(), "text/csv")})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is False and body["timestamp_column"] == "date"
+    assert body["bad_timestamps"] == 1 and body["dropped_columns"] == ["note"]
+    rep = body["report"]
+    assert rep["duplicates"] == 1 and rep["gaps"] == 1 and rep["nan_cells"] == 1
+    assert any("duplicated" in p for p in rep["problems"])
+
+    r = client.post(
+        "/v1/data/validate", files={"file": ("x.bin", b"\x00\x01\x02", "application/octet-stream")}
+    )
+    assert r.status_code in (200, 422)  # garbage is either rejected or reported, never a 500
+    r = client.post("/v1/data/validate", files={"file": ("empty.csv", b"", "text/csv")})
+    assert r.status_code == 422
+
+
+def test_leaderboard_lists_offline_families_and_live_versions(client: TestClient) -> None:
+    lb = client.get("/v1/leaderboard").json()
+    assert lb["dataset"] == "synth" and lb["families"] == ["linear", "nlinear", "dlinear", "patchtst"]
+    assert lb["offline"] == []  # no LTSF runs for the synthetic set; etth1 has them in evidence.json
+    assert lb["live"] and lb["live"][0]["version"] == "v0001" and lb["live"][0]["model"] == "dlinear"
+    assert any(v["active"] for v in lb["live"])
+
+
+def test_candidate_trains_by_family_then_gate_decides(deployment: dict) -> None:
+    root: Path = deployment["root"]
+    app = create_app(root, api_key="secret", threads=1)
+    client = TestClient(app)
+    key = {"X-API-Key": "secret"}
+    before = client.get("/ready").json()["model"]
+
+    assert client.post("/v1/candidates", json={"model": "linear"}).status_code == 401
+    assert client.post("/v1/candidates", json={"model": "lstm"}, headers=key).status_code == 422
+    req = client.post("/v1/candidates", json={"model": "linear", "max_epochs": 1}, headers=key)
+    assert req.status_code == 200 and req.json()["trigger"] == "candidate" and req.json()["model"] == "linear"
+    assert (
+        client.post("/v1/candidates", json={"model": "nlinear"}, headers=key).status_code == 409
+    )  # one at a time
+    listed = client.get("/v1/candidates").json()
+    assert listed["open_jobs"] == [req.json()["job"]]
+    job = next(j for j in listed["jobs"] if j["job"] == req.json()["job"])
+    assert job["status"] == "requested" and job["model"] == "linear" and job["max_epochs"] == 1
+
+    cfg = WorkerConfig(registry_root=root, stream_path=root / "stream.npz", max_epochs=5, threads=1)
+    done = {d["job"]: d for d in run_worker(cfg, once=True)}
+    result = done[req.json()["job"]]
+    assert result["activation"] == {"skipped": True, "reason": "activation left to the caller"}
+    version = result["version"]
+    assert Registry(root).manifest(version)["provenance"]["model"] == "linear"
+    assert Registry(root).manifest(version)["provenance"]["max_epochs"] == 1
+    assert client.get("/ready").json()["model"] == before, "a candidate never activates itself"
+
+    job = next(j for j in client.get("/v1/candidates").json()["jobs"] if j["job"] == req.json()["job"])
+    assert job["status"] == "done" and job["version"] == version and job["model"] == "linear"
+    assert job["metrics"]["val_mae_fixed"] > 0 and job["better_than_active"] in (True, False)
+
+    detail = client.get(f"/v1/models/{version}").json()
+    assert detail["active"] is False and detail["provenance"]["trigger"] == "candidate"
+    card = client.get(f"/v1/models/{version}/card")
+    assert card.status_code == 200 and card.headers["content-type"].startswith("text/markdown")
+    assert f"모델 카드 — {version}" in card.text and "linear" in card.text and "SHA-256" in card.text
+    assert client.get("/v1/models/v9999").status_code == 404
+
+    gate = client.post("/v1/candidates/promote", json={"version": version}, headers=key)
+    if job["better_than_active"]:
+        assert gate.status_code == 200 and gate.json()["promote"] is True
+        assert client.get("/ready").json()["model"] == version
+    else:
+        assert gate.status_code == 409 and gate.json()["promote"] is False
+        assert client.get("/ready").json()["model"] == before
+        forced = client.post("/v1/candidates/promote", json={"version": version, "force": True}, headers=key)
+        assert forced.status_code == 200 and forced.json()["activation"]["reason"] == "forced"
+        assert client.get("/ready").json()["model"] == version
+    assert client.post("/v1/candidates/promote", json={"version": version}, headers=key).status_code == 409
+
+    back = client.post("/v1/models/rollback", headers=key)
+    assert back.status_code == 200 and back.json()["rolled_back_to"] == before
+    assert client.get("/ready").json()["model"] == before
+    assert client.get("/v1/events").json()["swaps"][-1]["reason"] == "rollback"
+
+
+def test_replay_window_feeds_the_forecast_chart(client: TestClient, deployment: dict) -> None:
+    w = client.get("/v1/replay/window").json()
+    assert w["replay_active"] is False and len(w["history"]) == L and len(w["history"][0]) == 3
+    assert w["actual_next"] == []  # at the end of the stream there is no future to compare with
+    client.post("/v1/replay/start", json={}, headers={"X-API-Key": "secret"})
+    w = client.get("/v1/replay/window").json()
+    assert w["replay_active"] is True and len(w["actual_next"]) == H and len(w["actual_timestamps"]) == H
+    fc = client.post(
+        "/v1/forecast", json={"history": w["history"], "origin": w["origin"], "record": False}
+    ).json()
+    assert len(fc["forecast"]) == H and fc["timestamps"][0] == w["actual_timestamps"][0]
+    assert client.get("/v1/workbench").json()["active"] == client.get("/ready").json()["model"]

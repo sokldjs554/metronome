@@ -311,6 +311,30 @@ jobs:
           curl -sf http://127.0.0.1:8000/replay -o replay.html
           grep -q "<title>Metronome Replay</title>" replay.html
           ls -l replay.html
+      - name: workbench routes (data profile, CSV check, leaderboard, candidate training with the gate, model card, rollback)
+        run: |
+          B=http://127.0.0.1:8000
+          curl -sf $B/v1/data/profile | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['dataset']=='etth1' and d['source']['sha256'] and d['validation']['ok'] and len(d['channel_stats'])==7, d.keys(); print('profile ok', d['split'])"
+          printf 'timestamp,a,b\n2024-01-01 00:00:00,1,2\n2024-01-01 01:00:00,2,3\n2024-01-01 01:00:00,2,3\n2024-01-01 04:00:00,,5\n' > bad.csv
+          curl -sf -F file=@bad.csv $B/v1/data/validate | python3 -c "import sys,json; d=json.load(sys.stdin); r=d['report']; assert d['ok'] is False and r['duplicates']==1 and r['gaps']==1 and r['nan_cells']==1, d; print('csv check ok', r['problems'])"
+          curl -sf $B/v1/leaderboard | python3 -c "import sys,json; d=json.load(sys.stdin); assert [r['model'] for r in d['offline']][:1]==['patchtst'] and d['live'][0]['active'], d; print('leaderboard ok', len(d['offline']), 'families')"
+          job=$(curl -sf -X POST $B/v1/candidates -H 'content-type: application/json' -d '{"model": "linear", "max_epochs": 2}' | python3 -c "import sys,json; print(json.load(sys.stdin)['job'])")
+          for i in $(seq 1 120); do
+            st=$(curl -sf $B/v1/candidates | python3 -c "import sys,json; j=[x for x in json.load(sys.stdin)['jobs'] if x['job']=='$job'][0]; print(j['status'], j.get('version') or '')")
+            case "$st" in done*) break;; failed*) echo "::error::candidate failed: $st"; exit 1;; esac
+            sleep 2
+          done
+          echo "candidate: $st"
+          ver=$(echo "$st" | cut -d' ' -f2); [ -n "$ver" ]
+          curl -sf $B/ready | python3 -c "import sys,json; assert json.load(sys.stdin)['model']=='v0001', 'a candidate must not activate itself'"
+          curl -sf $B/v1/models/$ver/card | grep -q "모델 카드 — $ver"
+          code=$(curl -s -o gate.json -w "%{http_code}" -X POST $B/v1/candidates/promote -H 'content-type: application/json' -d "{\"version\": \"$ver\"}")
+          echo "gate -> $code: $(cat gate.json)"
+          [ "$code" = "200" ] || [ "$code" = "409" ]
+          if [ "$code" = "409" ]; then curl -sf -X POST $B/v1/candidates/promote -H 'content-type: application/json' -d "{\"version\": \"$ver\", \"force\": true}" > /dev/null; fi
+          curl -sf $B/ready | python3 -c "import sys,json; assert json.load(sys.stdin)['model']=='$ver'"
+          curl -sf -X POST $B/v1/models/rollback | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['rolled_back_to']=='v0001', d; print('rollback ok')"
+          curl -sf $B/v1/replay/window | python3 -c "import sys,json; d=json.load(sys.stdin); assert len(d['history'])==336, len(d['history'])"
       - name: container logs
         if: failure()
         run: docker logs demo

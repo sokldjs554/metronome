@@ -126,15 +126,24 @@ def process_job(cfg: WorkerConfig, job_path: Path) -> dict[str, Any]:
     dep = registry.deployment()
     ts, values = load_stream(cfg.stream_path)
     cutoff = int(job.get("cutoff_row") or len(values))
-    registry.update_job(job_path, status="training", started_at=time.time())
+    # A job may ask for a specific family / budget (the dashboard's candidate training); the
+    # worker's own config is the default. Activation can be left to a gate (API or Airflow).
+    from metronome.models import TRAINABLE  # torch import stays out of the serving image
+
+    model_name = str(job.get("model") or cfg.model)
+    if model_name not in TRAINABLE:
+        raise ValueError(f"unknown model family {model_name!r}; choose one of {sorted(TRAINABLE)}")
+    max_epochs = max(1, min(int(job.get("max_epochs") or cfg.max_epochs), 50))
+    activate = cfg.activate and bool(job.get("activate", True))
+    registry.update_job(job_path, status="training", started_at=time.time(), model=model_name)
     t0 = time.perf_counter()
     model, scaler, metrics = train_replacement(
         values,
         cutoff,
         dep.lookback,
         dep.horizon,
-        model_name=cfg.model,
-        max_epochs=cfg.max_epochs,
+        model_name=model_name,
+        max_epochs=max_epochs,
         val_days=cfg.val_days,
         seed=cfg.seed,
         threads=cfg.threads,
@@ -146,7 +155,8 @@ def process_job(cfg: WorkerConfig, job_path: Path) -> dict[str, Any]:
         "cutoff_row": cutoff,
         "cutoff_time": str(ts[cutoff - 1]),
         "train_rows": [0, cutoff],
-        "model": cfg.model,
+        "model": model_name,
+        "max_epochs": max_epochs,
         "seed": cfg.seed,
         "stream_file": str(cfg.stream_path),
     }
@@ -161,7 +171,7 @@ def process_job(cfg: WorkerConfig, job_path: Path) -> dict[str, Any]:
         cfg.registry_root / "work" / job["job_id"],
     )
     activation: dict[str, Any]
-    if not cfg.activate:
+    if not activate:
         activation = {"skipped": True, "reason": "activation left to the caller"}
     elif cfg.api_url:
         headers = {"X-API-Key": cfg.api_key} if cfg.api_key else {}

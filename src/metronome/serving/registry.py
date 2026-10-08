@@ -212,7 +212,12 @@ class Registry:
         jobs.mkdir(exist_ok=True)
         job_id = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + f"-{int(time.time() * 1000) % 1000:03d}"
         path = jobs / f"{job_id}.json"
-        _atomic_write(path, json.dumps({"job_id": job_id, "status": "requested", **reason}, indent=2))
+        _atomic_write(
+            path,
+            json.dumps(
+                {"job_id": job_id, "status": "requested", "requested_at": time.time(), **reason}, indent=2
+            ),
+        )
         return path
 
     def _jobs_with_status(self, statuses: set[str]) -> list[Path]:

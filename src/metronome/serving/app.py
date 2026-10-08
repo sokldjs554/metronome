@@ -34,6 +34,7 @@ from metronome.serving.model import ActiveModel, ServingModel
 from metronome.serving.monitor import ResidualMonitor
 from metronome.serving.registry import Registry, RegistryError, VerificationError
 from metronome.serving.replay import ReplayState, load_stream
+from metronome.serving.workbench import add_workbench_routes
 
 LOGGER = logging.getLogger("metronome.serving")
 STATIC = Path(__file__).resolve().parent.parent / "static"
@@ -404,6 +405,9 @@ def create_app(
         if state.replay is None:
             return {"active": False}
         return {"active": True, **state.replay.position()}
+
+    # ---- workbench: data profile / CSV check, candidates + gate, model cards, rollback ----------
+    add_workbench_routes(app, state, require_key)
 
     # ---- dashboard -----------------------------------------------------------------------------
     if STATIC.exists():
