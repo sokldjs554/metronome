@@ -153,6 +153,20 @@ DLinear(Zeng et al. 2023)와 PatchTST(Nie et al. 2023)를 **표준 LTSF 프로�
 - 독립 학습: Keras 자체 초기화(PyTorch 기본과 같은 균등 분포)로 학습한 시험 MSE 평균이 PyTorch 평균의 ±3% 이내.
 - 세 조건을 모두 만족하면 통과로 보고, 결과는 `artifacts/tf/` 의 JSON 으로 커밋합니다.
 
+## P16. Spark 클러스터 실행 (사후 추가, 결과를 보기 전에 고정)
+
+P12 의 Spark 작업이 한 머신 밖에서도 같은 결과를 내는지 봅니다. 기준은 [이슈 #12](https://github.com/sokldjs554/metronome/issues/12) 에 먼저 적었습니다.
+
+- 구성: Spark standalone master 1, worker 2(각 2 core·3 GB), driver 1(client mode), 각자 별도 컨테이너(`docker-compose.spark.yml`).
+  입력 CSV 와 출력 Parquet 은 네 컨테이너가 같은 경로로 마운트한 공유 볼륨에 둡니다(HDFS·객체 저장소 대용).
+- 작업: P12 와 같은 M4 6개 파일, 같은 변환 코드(`spark_melt`). 바뀌는 것은 master URL 과 입력 분할 크기(8 MiB)뿐입니다.
+  기본값 128 MiB 이면 큰 파일 하나가 태스크 하나라 일이 worker 에 나뉘지 않습니다.
+- 통과: (1) 같은 driver 에서 같은 파일로 돌린 Polars 결과와 셀 수·시계열 수가 같고 평균 합이 상대 1e-6 안(P12 규칙),
+  (2) 두 worker 의 executor 가 각각 완료 태스크의 25% 이상을 처리(driver REST API 의 executor 별 태스크 수).
+- 참고(판정에 쓰지 않음): 1회 실행 시간, 같은 분할 크기로 같은 컨테이너에서 돌린 `local[4]` 시간.
+  모두 vCPU 4개 호스트 하나 위의 컨테이너이므로 속도 이득이나 다중 노드 운영은 주장하지 않습니다.
+- 결과는 `artifacts/bigdata/bigdata_cluster.json` 으로 커밋하고, 같은 구성을 CI 워크플로가 다시 실행합니다.
+
 ## 변경 이력
 
 - 2026-10-06: 최초 고정.
@@ -192,3 +206,4 @@ DLinear(Zeng et al. 2023)와 PatchTST(Nie et al. 2023)를 **표준 LTSF 프로�
 - 2026-10-08 (문서 정정): P10 은 DLinear 레시피가 "P5 와 같다"고 적었지만, 실제 LTSF 실행(`dlinear_recipe`, `artifacts/runs/*dlinear*`)은
   최대 **20** epoch(patience 3)였습니다. 결과는 실행 그대로이며 문서를 실행에 맞춥니다. P5 의 재학습 캐시는 최대 10 epoch 그대로입니다.
 - 2026-10-08 (**사후 추가, 실행 전에 기록**): TensorFlow 재현 P15 를 추가했습니다. 판정 기준은 실행 전에 고정했습니다.
+- 2026-10-08 (**사후 추가, 결과를 보기 전에 기록**): Spark 클러스터 실행 P16 을 추가했습니다. P12 의 단일 머신 결과와 판정은 바꾸지 않습니다.
