@@ -1,0 +1,53 @@
+name: images
+
+# Continuous delivery of the container images: every change to the code or images on main publishes the
+# ONNX-only serving image and the PyTorch worker image to GitHub Container Registry, tagged with the
+# commit and `latest`, so any deployment can pin or roll back to an exact build.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "Dockerfile"
+      - "Dockerfile.worker"
+      - ".github/workflows/images.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: serve
+            file: Dockerfile
+          - name: worker
+            file: Dockerfile.worker
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: "${{ github.actor }}"
+          password: "${{ secrets.GITHUB_TOKEN }}"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: "${{ matrix.file }}"
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/metronome-${{ matrix.name }}:sha-${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/metronome-${{ matrix.name }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: record what was published
+        run: |
+          echo "ghcr.io/${{ github.repository_owner }}/metronome-${{ matrix.name }}:sha-${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"

@@ -11,4 +11,5 @@ registry/
 mlruns/
 tests/
 docs/
+!docs/demo/metronome-replay.html
 .github/

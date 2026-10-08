@@ -177,6 +177,28 @@ jobs:
       - run: pip install torch --index-url $TORCH_INDEX && pip install "tensorflow-cpu>=2.16,<3" && pip install -e ".[train,dev]"
       - run: python -c "import tensorflow as tf, torch; print('tensorflow', tf.__version__, 'torch', torch.__version__)"
       - run: pytest -q -p no:cacheprovider tests/test_tf.py
+  demo-image:
+    # The single-container image Render builds (render.yaml): trains v0001 at build time, serves the API,
+    # dashboard, in-process worker and the bundled browser replay at /replay.
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t metronome-demo -f Dockerfile.demo .
+      - name: run it like Render does and check the public routes
+        run: |
+          docker run -d --name demo -p 8000:8000 -e PORT=8000 metronome-demo
+          for i in $(seq 1 90); do curl -sf http://127.0.0.1:8000/ready && break; sleep 2; done
+          curl -sf http://127.0.0.1:8000/ready > ready.json || { echo "::error::demo container never became ready"; docker logs demo; exit 1; }
+          cat ready.json
+          curl -sf -o /dev/null -w "%{http_code} %{size_download}B /\n" http://127.0.0.1:8000/
+          curl -sf http://127.0.0.1:8000/replay -o replay.html
+          grep -q "<title>Metronome Replay</title>" replay.html
+          ls -l replay.html
+      - name: container logs
+        if: failure()
+        run: docker logs demo
 
   numbers:
     needs: lint
