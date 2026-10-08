@@ -22,18 +22,13 @@ permissions:
 
 jobs:
   render:
-    # Scheduled and pull-request runs need the deployment URL (repository variable RENDER_URL); until the
-    # service exists they are skipped instead of failing every 6 hours. A manual run always runs and fails
-    # loudly if it has no URL, so a missing or wrong URL is never silently treated as healthy.
-    if: github.event_name == 'workflow_dispatch' || vars.RENDER_URL != ''
+    # Target: the url input, else the repository variable RENDER_URL, else the live public service
+    # (render.yaml's `metronome-demo`, deployed 2026-10-08). A wrong or dead URL fails the run.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      BASE: "${{ inputs.url || vars.RENDER_URL }}"
+      BASE: "${{ inputs.url || vars.RENDER_URL || 'https://metronome-demo.onrender.com' }}"
     steps:
-      - name: deployment URL is set
-        run: |
-          [ -n "$BASE" ] || { echo "::error::No deployment URL: set the repository variable RENDER_URL or pass the url input."; exit 1; }
       - name: wake the instance (a free instance sleeps after 15 idle minutes)
         run: |
           echo "target: $BASE"
