@@ -8,7 +8,6 @@ version = "0.1.0"
 description = "When should a deployed time-series forecaster be retrained? A non-stop forecasting pipeline with data-driven retraining cadence."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
-license = { text = "MIT" }
 # Core = what the serving container needs. Training/experiment stacks are extras so the
 # inference image never ships PyTorch.
 dependencies = [

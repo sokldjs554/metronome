@@ -93,4 +93,4 @@ metronome worker --registry registry/etth1  # 다른 터미널: 재학습 job �
 [프로토콜(사전 등록)](docs/protocol.md) · [결과](docs/results.md) · [공고 항목별 근거](docs/evidence.md) · [모델 개선 탐색](docs/model_search.md) · [논문 재현](docs/reproduction.md) · [서비스·추론 최적화](docs/serving.md) ·
 [대용량 처리](docs/bigdata.md) · [운영 런북](docs/operations.md) · [설계](docs/design.md) · [ADR](docs/adr/0001-fail-closed-registry.md) · [범위와 조건](docs/scope.md)
 
-데이터는 공개 벤치마크를 시간순으로 재생한 것이고, 개인 프로젝트로 이슈 → 브랜치 → PR → CI 흐름을 갖춰 진행했습니다. 실험 조건과 범위는 [docs/scope.md](docs/scope.md), 코드는 MIT 입니다.
+데이터는 공개 벤치마크를 시간순으로 재생한 것이고, 개인 프로젝트로 이슈 → 브랜치 → PR → CI 흐름을 갖춰 진행했습니다. 실험 조건과 범위는 [docs/scope.md](docs/scope.md) 에 있습니다.
