@@ -1,4 +1,6 @@
 # Two-process deployment: an ONNX-only API and a PyTorch worker sharing one registry volume.
+# The API writes only the ACTIVE pointer (after verifying a new version) and jobs/ (retrain requests);
+# a serving-only deployment with no retrain loop can mount the registry read-only (see docs/serving.md).
 #   docker compose run --rm init      # once: download ETTh1, train v0001 into the volume
 #   docker compose up api worker      # serve + retrain loop; open http://localhost:8000
 services:
@@ -10,7 +12,7 @@ services:
       - registry:/registry
     command: >
       sh -c "metronome prepare etth1 &&
-             metronome deploy-init etth1 --registry /registry --threads 2 --max-epochs 10"
+             metronome deploy-init etth1 --registry /registry --threads 2 --max-epochs ${METRONOME_MAX_EPOCHS:-10}"
     profiles: ["init"]
 
   api:
@@ -23,7 +25,7 @@ services:
       METRONOME_REGISTRY: /registry
       METRONOME_API_KEY: ${METRONOME_API_KEY:-}
     volumes:
-      - registry:/registry:ro
+      - registry:/registry
     depends_on: []
 
   worker:
@@ -40,7 +42,7 @@ services:
       - api
     command: >
       sh -c "metronome worker --registry /registry --api-url http://api:8000
-             --api-key \"$${METRONOME_API_KEY}\" --threads 1"
+             --api-key \"$${METRONOME_API_KEY}\" --threads 1 --max-epochs ${METRONOME_MAX_EPOCHS:-10}"
 
 volumes:
   registry: {}

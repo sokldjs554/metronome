@@ -8,7 +8,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
 WORKDIR /app
-RUN groupadd --system metronome && useradd --system --gid metronome --home-dir /app --shell /usr/sbin/nologin metronome
+# Same fixed uid/gid as the worker image: a named volume mounted at /registry inherits the ownership of the
+# image's /registry on first use, so the API (ACTIVE pointer, jobs/) and the worker can both write it.
+RUN groupadd --gid 10001 metronome \
+    && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /app --shell /usr/sbin/nologin metronome \
+    && mkdir -p /registry && chown metronome:metronome /registry
 
 COPY pyproject.toml README.md ./
 COPY src ./src

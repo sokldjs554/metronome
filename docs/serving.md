@@ -75,10 +75,12 @@ p95 <!-- num:artifacts/serving/http_latency.json#http_ms/p95:.2f -->5.87<!-- /nu
 
 | 파일 | 내용 |
 |---|---|
-| `Dockerfile` | ONNX Runtime 전용 서빙 이미지. 레지스트리는 읽기 전용 볼륨(기동 시 ACTIVE 를 검증만 하고 다시 쓰지 않으며, 재학습 요청을 쓸 수 없으면 오류를 기록하고 계속 서빙) |
-| `Dockerfile.worker` | PyTorch CPU + 학습·내보내기. 같은 볼륨에 쓰고 API 에 activate 요청 |
-| `docker-compose.yml` | `init`(ETTh1 내려받기 + v0001) → `api` + `worker` |
+| `Dockerfile` | ONNX Runtime 전용 서빙 이미지(비 root, uid 10001). 재학습 루프가 없는 정적 서빙이면 레지스트리를 읽기 전용으로 마운트해도 되고, 그때 API 는 기동 시 ACTIVE 를 검증만 하고 다시 쓰지 않으며 재학습 요청을 쓸 수 없으면 오류를 기록하고 계속 서빙합니다 |
+| `Dockerfile.worker` | PyTorch CPU + 학습·내보내기(비 root, 같은 uid 10001). 같은 볼륨에 버전을 쓰고 API 에 activate 요청 |
+| `docker-compose.yml` | `init`(ETTh1 내려받기 + v0001) → `api` + `worker`. 두 컨테이너가 쓰는 볼륨이라 API 에도 쓰기 권한을 줍니다: API 는 새 버전을 검증한 뒤 ACTIVE 포인터를, 재학습 요청 시 jobs/ 를 씁니다 |
 | `Dockerfile.demo` + `render.yaml` | 단일 컨테이너 공개 데모(빌드 시 v0001 학습, `metronome demo` 로 API+worker 스레드) |
 
 CI 의 `docker` 잡은 smoke 레지스트리를 읽기 전용으로 마운트해 `/ready`·`/v1/forecast` 를 확인하고, 컨테이너를
-재시작한 뒤 같은 버전이 다시 서빙되는지 대조합니다.
+재시작한 뒤 같은 버전이 다시 서빙되는지 대조합니다. `compose` 잡은 README 의 두 컨테이너 배포를 끝까지 돌립니다:
+init 이 v0001 을 학습하고, 재생이 재학습을 요청하면 worker 컨테이너가 v0002 를 학습·등록하고 API 가 검증 후 교체하는지 확인합니다.
+이 잡을 추가하기 전에는 compose 의 API 가 레지스트리를 읽기 전용으로 마운트해 컨테이너에서는 재학습 요청도 모델 교체도 쓸 수 없었습니다.

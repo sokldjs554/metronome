@@ -72,7 +72,7 @@ weather 는 <!-- num:artifacts/cadence_summary_extended.json#datasets/weather/ex
 | 실험 결과 문서화·공유 | 숫자 마커(문서 ↔ JSON 대조를 CI 가 수행), 프로토콜 변경 이력, ADR, 사후 탐색 표시 | `scripts/check_numbers.py`, `docs/` |
 | Python · ML 기본 이론 | 시간순 분할, 정보 누출 차단(해결된 오차만 감시), 고정 척도, 기준 모델(naive·seasonal naive) | `data/splits.py`, `serving/monitor.py`, [reproduction.md](docs/reproduction.md) |
 | 데이터 분석·전처리 경험 | 4개 벤치마크 + M4 100,000 시계열 wide→long, 세 엔진 일치 검사 | `src/metronome/bigdata`, [bigdata.md](docs/bigdata.md) |
-| Git 기반 협업 | 변경별 커밋에 측정과 이유, PR·실험 이슈 템플릿, CONTRIBUTING, CI 5개 잡 | `.github/`, [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Git 기반 협업 | 변경별 커밋에 측정과 이유, PR·실험 이슈 템플릿, CONTRIBUTING, CI 6개 잡(lint · 테스트 3.11/3.12/3.13 · 파이프라인 smoke · Docker · compose 재학습 루프 · 숫자 대조) | `.github/`, [CONTRIBUTING.md](CONTRIBUTING.md) |
 | 문제 해결 중심 소통 | 첫 결과에서 본 결함(이상 구간 재학습이 모델을 망침)과 그 대응(게이트)을 사후 탐색으로 구분해 기록 | [protocol.md 변경 이력](docs/protocol.md#변경-이력), [results.md](docs/results.md) |
 | PyTorch · MLOps · 클라우드 · 대규모 · 논문 | PyTorch 학습 / MLflow(sqlite) 미러 + 파일 레지스트리 + DVC / Docker 3종 + compose + Render 블루프린트 / PySpark·Polars / DLinear·PatchTST 논문 대조 | [serving.md](docs/serving.md), [bigdata.md](docs/bigdata.md), [reproduction.md](docs/reproduction.md) |
 

@@ -14,4 +14,10 @@ COPY src ./src
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir ".[train,export]"
 
+# Non-root, same uid/gid as the serving image (see Dockerfile). /app/data is where `metronome prepare` writes.
+RUN groupadd --gid 10001 metronome \
+    && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /app --shell /usr/sbin/nologin metronome \
+    && mkdir -p /registry /app/data && chown -R metronome:metronome /registry /app
+USER metronome
+
 CMD ["sh", "-c", "metronome worker --registry \"$METRONOME_REGISTRY\" --api-url \"$METRONOME_API_URL\" --threads 1"]
