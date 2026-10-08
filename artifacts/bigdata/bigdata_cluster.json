@@ -1,0 +1,125 @@
+{
+  "source": {
+    "name": "M4 train (6 frequencies)",
+    "files": [
+      "M4-Hourly-train.csv",
+      "M4-Daily-train.csv",
+      "M4-Weekly-train.csv",
+      "M4-Monthly-train.csv",
+      "M4-Quarterly-train.csv",
+      "M4-Yearly-train.csv"
+    ]
+  },
+  "master": "spark://spark-master:7077",
+  "workers": [
+    {
+      "id": "worker-20261008024211-spark-worker-1-37233",
+      "host": "spark-worker-1",
+      "cores": 2,
+      "memory_mb": 3072
+    },
+    {
+      "id": "worker-20261008024211-spark-worker-2-35997",
+      "host": "spark-worker-2",
+      "cores": 2,
+      "memory_mb": 3072
+    }
+  ],
+  "conf": {
+    "spark.driver.memory": "4g",
+    "spark.executor.cores": "2",
+    "spark.executor.memory": "2g",
+    "spark.cores.max": "4",
+    "spark.scheduler.minRegisteredResourcesRatio": "1.0",
+    "spark.scheduler.maxRegisteredResourcesWaitingTime": "120s",
+    "spark.sql.files.maxPartitionBytes": "8388608",
+    "spark.sql.shuffle.partitions": "8",
+    "spark.ui.enabled": "true"
+  },
+  "polars": {
+    "seconds": 10.027589727000077,
+    "n_cells": 24002047,
+    "n_series": 100000,
+    "checksum": 409255600.4289825
+  },
+  "cluster": {
+    "seconds": 585.3785477979999,
+    "n_cells": 24002047,
+    "n_series": 100000,
+    "checksum": 409255600.4289824,
+    "per_file": [
+      {
+        "file": "M4-Hourly-train.csv",
+        "input_partitions": 1,
+        "n_cells": 353500
+      },
+      {
+        "file": "M4-Daily-train.csv",
+        "input_partitions": 12,
+        "n_cells": 9964658
+      },
+      {
+        "file": "M4-Weekly-train.csv",
+        "input_partitions": 1,
+        "n_cells": 366912
+      },
+      {
+        "file": "M4-Monthly-train.csv",
+        "input_partitions": 11,
+        "n_cells": 10382411
+      },
+      {
+        "file": "M4-Quarterly-train.csv",
+        "input_partitions": 5,
+        "n_cells": 2214108
+      },
+      {
+        "file": "M4-Yearly-train.csv",
+        "input_partitions": 4,
+        "n_cells": 720458
+      }
+    ]
+  },
+  "executors": [
+    {
+      "id": "0",
+      "host": "spark-worker-2",
+      "cores": 2,
+      "completed_tasks": 39,
+      "failed_tasks": 0,
+      "task_seconds": 951.373
+    },
+    {
+      "id": "1",
+      "host": "spark-worker-1",
+      "cores": 2,
+      "completed_tasks": 52,
+      "failed_tasks": 0,
+      "task_seconds": 770.94
+    }
+  ],
+  "task_share_by_host": {
+    "spark-worker-2": 0.42857142857142855,
+    "spark-worker-1": 0.5714285714285714
+  },
+  "min_share": 0.25,
+  "agree": true,
+  "distributed": true,
+  "host_cpu_count": 4,
+  "machine": "x86_64",
+  "versions": {
+    "spark": "4.2.0",
+    "polars": "1.44.2",
+    "python": "3.12.15"
+  },
+  "local_same_splits": {
+    "seconds": 1578.97334929,
+    "n_cells": 24002047,
+    "n_series": 100000,
+    "checksum": 409255600.4289835,
+    "master": "local[4]",
+    "agree": true
+  },
+  "passed": true,
+  "notes": "Run with docker compose on a 4-vCPU, 16 GB Linux container (the same host as bigdata.json); the four Spark containers shared those 4 vCPUs (workers capped at 2 CPUs each). M4 files were copied from a local directory with the pinned SHA-256 checked (--local-dir) instead of downloaded. One run; the cluster run came first, then the local[4] reference reused the same driver JVM (4g heap) with the workers idle."
+}

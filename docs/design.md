@@ -59,7 +59,7 @@ flowchart LR
 | `metronome/export` | ONNX 내보내기 · parity · INT8 · 벤치 |
 | `metronome/serving` | 레지스트리, 엔진, 모델 교체, 감시, 리플레이, FastAPI, worker, 초기 배포 |
 | `metronome/tracking` | MLflow 미러 |
-| `metronome/bigdata` | Polars / pandas / PySpark 대용량 단계 |
+| `metronome/bigdata` | Polars / pandas / PySpark 대용량 단계, Spark standalone 클러스터 실행(`cluster.py`) |
 | `metronome/report` | 요약 JSON, SVG 차트, 대시보드 근거 파일 |
 | `metronome/cli.py` | 모든 단계의 명령 |
 
