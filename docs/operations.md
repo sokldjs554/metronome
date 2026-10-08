@@ -11,6 +11,7 @@
 |---|---|---|
 | 서버 데모 | Render Blueprint 가 `render.yaml` 을 읽어 `Dockerfile.demo` 를 빌드합니다. 빌드 중에 고정 해시의 ETTh1 을 내려받아 v0001 을 학습합니다. main 에 머지되면 Render 가 다시 빌드합니다 | `cloud-smoke` 워크플로 |
 | 서버 데모 (Azure) | main 에 데모 관련 변경이 머지되면 `azure` 워크플로가 `Dockerfile.demo` 를 GHCR 에 `metronome-demo:sha-<커밋>` 으로 게시하고, 키 없는 OIDC 로그인(저장소 Secret `AZURE_CLIENT_ID`·`AZURE_TENANT_ID`·`AZURE_SUBSCRIPTION_ID`, main 브랜치의 Actions 만 허용)으로 Azure Container Apps(`metronome-rg` / `metronome-env`, 한국 중부)의 `metronome-demo` 앱을 그 이미지로 갱신합니다. 그다음 100% 트래픽을 받는 리비전이 그 이미지로 건강한지 확인하고, 공개 주소에 `cloud-smoke` 와 같은 점검을 돌립니다. 요청이 없으면 0대로 줄어듭니다 | `azure` 워크플로 요약의 주소와 점검 표 |
+| Azure 리소스 (코드) | `infra/azure` 의 Terraform 이 리소스 그룹·Container Apps 환경·앱을 선언합니다. `infra` 워크플로가 PR 에서는 `fmt`·`validate`, main 에서는 OIDC 로그인 후 기존 리소스를 상태에 import 하고 `terraform plan` 을 돌려 **변경 0건이어야 통과**합니다(코드 = 실제 상태). 이미지 태그와 리비전은 `azure` 워크플로가 바꾸므로 Terraform 은 무시합니다. 상태는 같은 리소스 그룹의 Storage Account(`tfstate` 컨테이너)에 있고, `apply` 는 수동 실행에서 `apply=true` 를 줄 때만 합니다 | `infra` 워크플로 요약의 plan |
 | 이미지 | main 에 코드·이미지 변경이 머지되면 `images` 워크플로가 서빙·worker 이미지를 GHCR 에 `sha-<커밋>` 과 `latest` 로 게시합니다 | 워크플로 요약의 이미지 이름 |
 | 브라우저 리플레이 | main 의 `docs/demo/metronome-replay.html` 이 바뀌면 `pages` 워크플로가 GitHub Pages(https://sokldjs554.github.io/metronome/)에 배포하고, 공개 주소가 페이지를 내주는지 확인합니다. 서버가 없어 Render 와 무관하게 열립니다 | `pages` 워크플로 요약의 live 주소 |
 | 두 컨테이너 | `docker compose run --rm init` 후 `docker compose up api worker`. CI 의 `compose` 잡이 같은 절차를 매번 실행합니다 | `/ready`, `/v1/events` |
