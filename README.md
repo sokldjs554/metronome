@@ -82,7 +82,7 @@ weather 는 <!-- num:artifacts/cadence_summary_extended.json#datasets/weather/ex
 | Python 기반 개발 | 전 모듈 Python, 타입 힌트와 mypy strict(데이터·검출기·캐시·서빙), ruff, pytest(커버리지 하한 70% 를 CI 가 강제), Python 3.11·3.12·3.13 을 CI 가 실행 | `pyproject.toml`, `tests/`, `.github/workflows/ci.yml` |
 | 머신러닝 기본 이론 | 시간순 분할, 정보 누출 차단(해결된 오차만 감시), 고정 척도, 기준 모델(naive·seasonal naive), 시드 반복과 신뢰구간 | `data/splits.py`, `serving/monitor.py`, [reproduction.md](docs/reproduction.md) |
 | 데이터 분석·전처리 경험 | 4개 벤치마크 + M4 100,000 시계열 wide→long, 세 엔진 일치 검사 | `src/metronome/bigdata`, [bigdata.md](docs/bigdata.md) |
-| Git 기반 협업 | 이슈 → 기능 브랜치 → 템플릿을 채운 PR → CI 통과 → merge commit 머지로 진행했습니다([이슈](https://github.com/sokldjs554/metronome/issues?q=is%3Aissue), [PR](https://github.com/sokldjs554/metronome/pulls?q=is%3Apr+is%3Amerged)). 브랜치 간 충돌은 main 병합으로 풀었고, CODEOWNERS·이슈 템플릿·CONTRIBUTING 으로 규칙을 고정했습니다. CI 는 lint · 테스트 3.11/3.12/3.13 · 파이프라인 smoke · Docker · compose 재학습 루프 · 데모 이미지 · TensorFlow · 숫자 대조이고, 운영 워크플로로 Render 6시간 점검, GHCR 이미지 게시, GitHub Pages 데모 배포, Spark 클러스터 실행이 있습니다 | `.github/`, [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Git 기반 협업 | 이슈 → 기능 브랜치 → 템플릿을 채운 PR → CI 통과 → merge commit 머지로 진행했습니다([이슈](https://github.com/sokldjs554/metronome/issues?q=is%3Aissue), [PR](https://github.com/sokldjs554/metronome/pulls?q=is%3Apr+is%3Amerged)). 브랜치 간 충돌은 main 병합으로 풀었고, CODEOWNERS·이슈 템플릿·CONTRIBUTING 으로 규칙을 고정했습니다. CI 는 lint · 테스트 3.11/3.12/3.13 · 파이프라인 smoke · Docker · compose 재학습 루프 · Kubernetes(kind) 재학습 루프 · Airflow DAG 실행 · 데모 이미지(다섯 단계 경로) · TensorFlow · 숫자 대조이고, 운영 워크플로로 Azure 자동 배포, Terraform plan 대조, 두 주소 6시간 점검, GHCR 이미지 게시, GitHub Pages 데모 배포, Spark 클러스터 실행이 있습니다 | `.github/`, [CONTRIBUTING.md](CONTRIBUTING.md) |
 | 문제 해결 중심 소통 | 첫 결과에서 본 결함(이상 구간 재학습이 모델을 망침)과 그 대응(게이트)을 사후 탐색으로 구분해 기록 | [protocol.md 변경 이력](docs/protocol.md#변경-이력), [results.md](docs/results.md) |
 | PyTorch 또는 TensorFlow (우대) | PyTorch 로 모델과 학습 루프를 구현하고, 같은 DLinear 를 TensorFlow/Keras 로도 구현해 가중치 이식 시 출력 일치, 같은 초기값·배치 순서로 함께 학습 시 시험 MSE 차이 0.001% 미만을 확인했습니다(사전 등록 P15) | `src/metronome/models`, `src/metronome/tfmodels.py`, [reproduction.md](docs/reproduction.md#tensorflow-교차-재현-protocol-p15) |
 | MLOps (우대) | 해시·참조 입출력으로 검증하는 파일 레지스트리와 원자적 교체, MLflow(sqlite) 기록, DVC 파이프라인(`dvc dag`: prepare → cache → simulate → report), 승격 게이트. 실험에서 좋았던 주 1회 재학습 + 승격 게이트 정책은 Airflow DAG(`dags/metronome_retrain.py`)로 운영하며, CI 가 데모 API 를 띄우고 `airflow dags test` 로 끝까지 실행합니다 | `serving/registry.py`, `tracking/`, `dvc.yaml`, [ADR 0001](docs/adr/0001-fail-closed-registry.md) |
@@ -128,11 +128,11 @@ metronome worker --registry registry/etth1  # 다른 터미널: 재학습 job �
 ## 문서
 
 [프로토콜(사전 등록)](docs/protocol.md) · [결과](docs/results.md) · [모델 개선 탐색](docs/model_search.md) · [논문 재현](docs/reproduction.md) · [서비스·추론 최적화](docs/serving.md) ·
-[대용량 처리](docs/bigdata.md) · [운영 런북](docs/operations.md) · [설계](docs/design.md) · [ADR](docs/adr/0001-fail-closed-registry.md) · [한계](docs/limitations.md)
+[대용량 처리](docs/bigdata.md) · [운영 런북](docs/operations.md) · [설계](docs/design.md) · [ADR](docs/adr/0001-fail-closed-registry.md) · [범위와 조건](docs/scope.md)
 
 ## 범위
 
 데이터는 공개 벤치마크(ETTh1·ETTh2·Jena weather·UCI electricity 20채널, M4)를 시간순으로 재생한 것이고, 개인 프로젝트로 이슈 → 브랜치 → PR → CI 흐름을 갖춰 진행했습니다.
 Kubernetes 매니페스트는 CI 의 한 노드 kind 클러스터에서, Airflow DAG 는 CI 의 `airflow dags test` 로, Terraform 은 실제 Azure 리소스와의 `plan` 대조로 검증했고,
 서버 데모는 Azure Container Apps 와 Render 에 올렸습니다. Spark 클러스터는 서버 한 대 위의 컨테이너 3개(master 1 + worker 2)입니다.
-실험 조건과 한계는 [docs/limitations.md](docs/limitations.md) 에 있습니다. 데이터의 권리는 각 제공자에게 있으며 코드는 MIT 입니다.
+실험 조건과 범위는 [docs/scope.md](docs/scope.md) 에 있습니다. 데이터의 권리는 각 제공자에게 있으며 코드는 MIT 입니다.
