@@ -74,7 +74,13 @@ weather 는 <!-- num:artifacts/cadence_summary_extended.json#datasets/weather/ex
 | 데이터 분석·전처리 경험 | 4개 벤치마크 + M4 100,000 시계열 wide→long, 세 엔진 일치 검사 | `src/metronome/bigdata`, [bigdata.md](docs/bigdata.md) |
 | Git 기반 협업 | 변경별 커밋에 측정과 이유, PR·실험 이슈 템플릿, CONTRIBUTING, CI 6개 잡(lint · 테스트 3.11/3.12/3.13 · 파이프라인 smoke · Docker · compose 재학습 루프 · 숫자 대조) | `.github/`, [CONTRIBUTING.md](CONTRIBUTING.md) |
 | 문제 해결 중심 소통 | 첫 결과에서 본 결함(이상 구간 재학습이 모델을 망침)과 그 대응(게이트)을 사후 탐색으로 구분해 기록 | [protocol.md 변경 이력](docs/protocol.md#변경-이력), [results.md](docs/results.md) |
-| PyTorch · MLOps · 클라우드 · 대규모 · 논문 | PyTorch 학습 / MLflow(sqlite) 미러 + 파일 레지스트리 + DVC / Docker 3종 + compose + Render 블루프린트 / PySpark·Polars / DLinear·PatchTST 논문 대조 | [serving.md](docs/serving.md), [bigdata.md](docs/bigdata.md), [reproduction.md](docs/reproduction.md) |
+| PyTorch 또는 TensorFlow (우대) | PyTorch 로 모델과 학습 루프를 구현했습니다. **TensorFlow 는 쓰지 않았습니다** | `src/metronome/models`, `train/trainer.py` |
+| MLOps (우대) | 해시·참조 입출력으로 검증하는 파일 레지스트리와 원자적 교체, MLflow(sqlite) 기록, DVC 파이프라인(`dvc dag`: prepare → cache → simulate → report), 승격 게이트 | `serving/registry.py`, `tracking/`, `dvc.yaml`, [ADR 0001](docs/adr/0001-fail-closed-registry.md) |
+| 클라우드 환경 운영 (우대) | Docker 이미지 3종과 compose 의 감시 → 재학습 → 교체 루프를 CI 의 `compose` 잡이 실제 컨테이너로 실행하고, `render.yaml` 로 Render 에 배포합니다. **AWS·GCP·Azure 운영은 하지 않았습니다** | `Dockerfile*`, `docker-compose.yml`, `render.yaml`, `.github/workflows/ci.yml` |
+| 대규모 데이터 처리 (우대) | M4 <!-- num:artifacts/bigdata/bigdata.json#engines/0/n_series:, -->100,000<!-- /num --> 시계열(<!-- num:artifacts/bigdata/bigdata.json#engines/0/n_cells:, -->24,002,047<!-- /num --> 셀)을 Polars·pandas·PySpark(`local[4]`)로 처리해 결과가 같음을 검사했습니다. 다중 노드 클러스터는 아닙니다 | `src/metronome/bigdata`, [bigdata.md](docs/bigdata.md) |
+| 논문 구현·재현 (우대) | DLinear·PatchTST 를 논문 설명으로 구현해 보고값과 대조했습니다. 기준(MSE ±3%) 안인 설정과 밖인 설정(DLinear·Linear ETTh1)을 시드 편차와 함께 그대로 적었습니다 | `models`, `eval/ltsf.py`, [reproduction.md](docs/reproduction.md) |
+
+공고의 주요업무 5개·자격요건 7개·우대사항 5개 중 경력 무관·학력 무관은 지원 허용 조건이라 표에서 뺐습니다. 나머지 15개를 항목마다 한 줄로 대응했고, 하지 않은 것은 같은 줄에 적었습니다.
 
 ## 어떻게 동작하나
 
@@ -116,5 +122,5 @@ metronome worker --registry registry/etth1  # 다른 터미널: 재학습 job �
 
 ## 주장하지 않는 것
 
-실제 고객·설비 데이터, 금액으로 환산한 재학습 비용, 다중 노드 클러스터, 모델 구조 탐색, 다인 협업 이력, 운영 SLA.
+실제 고객·설비 데이터, 금액으로 환산한 재학습 비용, 다중 노드 클러스터, AWS·GCP·Azure 운영, TensorFlow 사용 경험, 모델 구조 탐색, 다인 협업 이력, 운영 SLA.
 자세한 조건은 [docs/limitations.md](docs/limitations.md) 에 있습니다. 데이터의 권리는 각 제공자에게 있으며 코드는 MIT 입니다.
