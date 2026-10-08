@@ -1,0 +1,56 @@
+# The retrain worker: picks up jobs/ written by the API, trains, exports ONNX, registers the version
+# and asks the API to activate it (the API re-verifies before swapping).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels: { app: worker }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: worker }
+  template:
+    metadata:
+      labels: { app: worker }
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      initContainers:
+        - name: wait-for-registry
+          image: ghcr.io/sokldjs554/metronome-worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until [ -f /registry/ACTIVE ]; do echo 'waiting for deploy-init'; sleep 3; done"]
+          volumeMounts:
+            - name: registry
+              mountPath: /registry
+      containers:
+        - name: worker
+          image: ghcr.io/sokldjs554/metronome-worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - metronome worker --registry "$METRONOME_REGISTRY" --api-url http://api:8000 --api-key "$METRONOME_API_KEY" --threads 1 --max-epochs "$METRONOME_MAX_EPOCHS"
+          env:
+            - name: METRONOME_API_URL
+              value: http://api:8000
+            - name: METRONOME_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: metronome-api
+                  key: api-key
+                  optional: true
+          envFrom:
+            - configMapRef:
+                name: metronome-config
+          resources:
+            requests: { cpu: 500m, memory: 512Mi }
+            limits: { memory: 2Gi }
+          volumeMounts:
+            - name: registry
+              mountPath: /registry
+      volumes:
+        - name: registry
+          persistentVolumeClaim:
+            claimName: registry

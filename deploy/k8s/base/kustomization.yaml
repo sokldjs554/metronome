@@ -1,0 +1,13 @@
+# Two-process deployment on Kubernetes: the ONNX-only API and the PyTorch worker share one registry
+# volume, exactly like docker-compose.yml. `kubectl apply -k deploy/k8s/base` after the images are
+# published; CI applies overlays/ci on a kind cluster with locally built images.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: metronome
+resources:
+  - namespace.yaml
+  - registry-pvc.yaml
+  - configmap.yaml
+  - init-job.yaml
+  - api.yaml
+  - worker.yaml

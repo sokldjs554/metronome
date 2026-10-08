@@ -15,9 +15,27 @@
 | 이미지 | main 에 코드·이미지 변경이 머지되면 `images` 워크플로가 서빙·worker 이미지를 GHCR 에 `sha-<커밋>` 과 `latest` 로 게시합니다 | 워크플로 요약의 이미지 이름 |
 | 브라우저 리플레이 | main 의 `docs/demo/metronome-replay.html` 이 바뀌면 `pages` 워크플로가 GitHub Pages(https://sokldjs554.github.io/metronome/)에 배포하고, 공개 주소가 페이지를 내주는지 확인합니다. 서버가 없어 Render 와 무관하게 열립니다 | `pages` 워크플로 요약의 live 주소 |
 | 두 컨테이너 | `docker compose run --rm init` 후 `docker compose up api worker`. CI 의 `compose` 잡이 같은 절차를 매번 실행합니다 | `/ready`, `/v1/events` |
+| Kubernetes | `kubectl apply -k deploy/k8s/base`(이미지는 GHCR). `deploy-init` Job 이 v0001 을 PVC 에 학습하고, `api`·`worker` Deployment 가 같은 PVC 를 공유합니다. CI 의 `k8s` 잡이 kind 클러스터에서 같은 절차와 재학습 → 교체 루프를 실행합니다. 여러 노드에 올리면 PVC 를 ReadWriteMany 클래스로 바꾸거나 두 Deployment 를 한 노드에 고정해야 합니다 | `kubectl -n metronome get pods`, `/ready` |
 
 배포가 끝나면 `cloud-smoke` 를 수동 실행합니다(Actions → cloud-smoke → Run workflow). 대상은 실행할 때 넣은 주소, 저장소 변수
 `RENDER_URL`, 기본값 https://metronome-demo.onrender.com 순서로 정합니다. 서비스를 다른 이름으로 다시 만들면 `RENDER_URL` 만 바꾸면 됩니다.
+
+## 주기 재학습 (Airflow)
+
+실험에서 ETTh1 은 주 1회 재학습에 승격 게이트를 붙인 정책이 교체를 줄이면서 MAE 를 낮췄습니다([results.md](results.md)).
+같은 정책이 `dags/metronome_retrain.py` 의 DAG `metronome_weekly_retrain`(매주 월요일 03:00)입니다.
+
+| 태스크 | 하는 일 |
+|---|---|
+| `champion_state` | `/ready`·`/v1/monitor`·`/v1/replay` 로 현역 버전, 최근 7일 MAE, 재생 중이면 커서를 읽음 |
+| `train_candidate` | 레지스트리에 재학습 job 을 쓰고 worker 코드를 활성화 없이 한 번 실행(`activate=False`). 후보는 ONNX 로 내보내고 parity 검사와 등록까지만 |
+| `gate` | 후보의 검증 MAE(고정 척도)가 현역의 최근 7일 MAE(없으면 배포 시 검증 MAE)보다 낮을 때만 `activate` 로 분기. 판단은 `METRONOME_GATE_LOG` 에 JSON 으로 남김 |
+| `activate` / `keep` | API 에 활성화를 요청(API 가 해시·참조 입출력을 다시 검증) / 현역 유지 |
+
+설정은 Airflow Variable 또는 환경 변수 `METRONOME_API_URL`, `METRONOME_REGISTRY`, `METRONOME_API_KEY`, `METRONOME_MAX_EPOCHS` 입니다.
+worker 코드가 PyTorch 를 쓰므로 Airflow 는 `metronome[train,export]` 가 설치된 환경에서 돌립니다. CI 의 `airflow` 잡이 데모 API 를 띄우고
+`airflow dags test` 로 DAG 를 끝까지 실행해, 게이트 판단과 그 결과(`/ready` 의 모델)가 맞는지 확인합니다. 검출기 경보에 의한 재학습(서빙 루프)과는
+독립이며, 둘 다 같은 레지스트리의 job 파일과 같은 활성화 API 를 씁니다.
 
 ## 점검과 알림
 

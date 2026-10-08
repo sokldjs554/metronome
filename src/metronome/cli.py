@@ -250,8 +250,9 @@ def worker(
     threads: int = 1,
     once: bool = False,
     poll_seconds: float = 2.0,
+    activate: bool = True,
 ) -> None:
-    """Train replacements for retrain jobs and activate them through the API."""
+    """Train replacements for retrain jobs and activate them through the API (--no-activate: register only)."""
     import logging
 
     from metronome.serving.worker import WorkerConfig, run_worker
@@ -265,6 +266,7 @@ def worker(
         max_epochs=max_epochs,
         threads=threads,
         poll_seconds=poll_seconds,
+        activate=activate,
     )
     done = run_worker(cfg, once=once)
     for d in done:
