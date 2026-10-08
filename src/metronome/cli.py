@@ -307,6 +307,55 @@ def demo(
     uvicorn.run(application, host=host, port=port, log_level="info")
 
 
+@app.command("tf-repro")
+def tf_repro(
+    dataset: str = "etth1",
+    seeds: str = "0,1,2",
+    processed_dir: Path = PROCESSED,
+    out_dir: Path = Path("artifacts/tf"),
+) -> None:
+    """TensorFlow reproduction of DLinear (protocol P15): parity, lockstep training, independent training."""
+    from metronome.tfmodels import run_reproduction
+
+    report = run_reproduction(
+        dataset, seeds=tuple(int(s) for s in seeds.split(",")), processed_dir=processed_dir, out_dir=out_dir
+    )
+    typer.echo(json.dumps(report["summary"], indent=1))
+
+
+@app.command()
+def tune(
+    dataset: str,
+    kind: str = "etth",
+    horizon: int = 96,
+    trials: int = 40,
+    threads: int = 1,
+    processed_dir: Path = PROCESSED,
+    out_dir: Path = Path("artifacts/tune"),
+    mlflow_uri: str | None = "sqlite:///mlflow.db",
+) -> None:
+    """Pre-registered model improvement search (protocol P14): validation-only search, one test look."""
+    from metronome.tune.search import run_search
+
+    report = run_search(
+        dataset,
+        kind=kind,
+        horizon=horizon,
+        n_trials=trials,
+        processed_dir=processed_dir,
+        out_dir=out_dir,
+        threads=threads,
+        mlflow_uri=mlflow_uri,
+        log=typer.echo,
+    )
+    s = report["summary"]
+    typer.echo(
+        f"{dataset}: selected {report['selected_params']} test MSE {s['selected_test_mse_mean']:.4f} "
+        f"vs paper {s['paper_test_mse_mean']:.4f} ({s['mse_improvement_pct']:+.2f}%), "
+        f"{s['n_seeds_better']}/{len(report['test_seeds'])} seeds better"
+    )
+
+
 @app.command()
 def report(root: Path = Path(".")) -> None:
     """Aggregate artifacts -> summaries, charts, dashboard evidence (docs quote these via markers)."""

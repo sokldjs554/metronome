@@ -67,7 +67,7 @@ weather 는 <!-- num:artifacts/cadence_summary_extended.json#datasets/weather/ex
 |---|---|---|
 | AI 모델 설계·학습 | DLinear · NLinear · Linear · PatchTST 를 논문 설명으로 직접 구현, 단일 학습 루프(시드·조기 종료·lr 스케줄·웜 스타트) | `src/metronome/models`, `train/trainer.py`, `tests/test_models.py` |
 | 데이터 전처리 파이프라인 | URL+SHA-256 고정 소스, 스키마 검사(결측·중복·역행·간격), Polars 리샘플·보간, 학습 구간 전용 스케일러, DVC 단계 | `src/metronome/data`, `dvc.yaml`, `tests/test_data.py` |
-| 모델 성능 평가·개선 | 재학습 캐시 위 20개 정책, 7일 블록 부트스트랩 구간, 사전 등록 가설 H1~H4, 승격 게이트 | `src/metronome/cadence`, [protocol.md](docs/protocol.md), [results.md](docs/results.md) |
+| 모델 성능 평가·개선 | 재학습 캐시 위 20개 정책, 7일 블록 부트스트랩 구간, 사전 등록 가설 H1~H5, 승격 게이트, Optuna 로 검증 구간에서만 고르고 시험은 한 번 보는 모델 개선 탐색(H5 기각: 논문 레시피가 이미 최적 근처) | `src/metronome/cadence`, `src/metronome/tune`, [protocol.md](docs/protocol.md), [results.md](docs/results.md), [model_search.md](docs/model_search.md) |
 | 서비스 적용을 위한 추론 최적화 | ONNX Runtime 서빙(이미지에 torch 없음), parity 검증, 동적 INT8 비교, 엔진 교대 지연 벤치, HTTP 지연 | `src/metronome/export`, [serving.md](docs/serving.md) |
 | 실험 결과 문서화·공유 | 숫자 마커(문서 ↔ JSON 대조를 CI 가 수행), 프로토콜 변경 이력, ADR, 사후 탐색 표시 | `scripts/check_numbers.py`, `docs/` |
 | Python 기반 개발 | 전 모듈 Python, 타입 힌트와 mypy strict(데이터·검출기·캐시·서빙), ruff, pytest, Python 3.11·3.12·3.13 을 CI 가 실행 | `pyproject.toml`, `tests/`, `.github/workflows/ci.yml` |
@@ -75,7 +75,7 @@ weather 는 <!-- num:artifacts/cadence_summary_extended.json#datasets/weather/ex
 | 데이터 분석·전처리 경험 | 4개 벤치마크 + M4 100,000 시계열 wide→long, 세 엔진 일치 검사 | `src/metronome/bigdata`, [bigdata.md](docs/bigdata.md) |
 | Git 기반 협업 | 이슈 → 기능 브랜치 → 템플릿을 채운 PR → CI 통과 → merge commit 머지로 진행했습니다([이슈 #1~#4](https://github.com/sokldjs554/metronome/issues?q=is%3Aissue), [PR #5~#8](https://github.com/sokldjs554/metronome/pulls?q=is%3Apr)). 브랜치 간 충돌은 main 병합으로 풀었고, CODEOWNERS·이슈 템플릿·CONTRIBUTING 으로 규칙을 고정했습니다. CI 는 lint · 테스트 3.11/3.12/3.13 · 파이프라인 smoke · Docker · compose 재학습 루프 · 데모 이미지 · TensorFlow · 숫자 대조이고, 운영 워크플로로 Render 점검과 GHCR 이미지 게시가 있습니다. 1인 프로젝트라 다른 사람의 리뷰 이력은 없습니다 | `.github/`, [CONTRIBUTING.md](CONTRIBUTING.md) |
 | 문제 해결 중심 소통 | 첫 결과에서 본 결함(이상 구간 재학습이 모델을 망침)과 그 대응(게이트)을 사후 탐색으로 구분해 기록 | [protocol.md 변경 이력](docs/protocol.md#변경-이력), [results.md](docs/results.md) |
-| PyTorch 또는 TensorFlow (우대) | PyTorch 로 모델과 학습 루프를 구현했습니다. **TensorFlow 는 쓰지 않았습니다** | `src/metronome/models`, `train/trainer.py` |
+| PyTorch 또는 TensorFlow (우대) | PyTorch 로 모델과 학습 루프를 구현하고, 같은 DLinear 를 TensorFlow/Keras 로도 구현해 가중치 이식 시 출력 일치, 같은 초기값·배치 순서로 함께 학습 시 시험 MSE 차이 0.001% 미만을 확인했습니다(사전 등록 P15) | `src/metronome/models`, `src/metronome/tfmodels.py`, [reproduction.md](docs/reproduction.md#tensorflow-교차-재현-protocol-p15) |
 | MLOps (우대) | 해시·참조 입출력으로 검증하는 파일 레지스트리와 원자적 교체, MLflow(sqlite) 기록, DVC 파이프라인(`dvc dag`: prepare → cache → simulate → report), 승격 게이트 | `serving/registry.py`, `tracking/`, `dvc.yaml`, [ADR 0001](docs/adr/0001-fail-closed-registry.md) |
 | 클라우드 환경 운영 (우대) | Docker 이미지 3종과 compose 의 감시 → 재학습 → 교체 루프를 CI 의 `compose` 잡이 실제 컨테이너로 실행하고, `render.yaml` 로 Render 에 배포합니다. **AWS·GCP·Azure 운영은 하지 않았습니다** | `Dockerfile*`, `docker-compose.yml`, `render.yaml`, `.github/workflows/ci.yml` |
 | 대규모 데이터 처리 (우대) | M4 <!-- num:artifacts/bigdata/bigdata.json#engines/0/n_series:, -->100,000<!-- /num --> 시계열(<!-- num:artifacts/bigdata/bigdata.json#engines/0/n_cells:, -->24,002,047<!-- /num --> 셀)을 Polars·pandas·PySpark(`local[4]`)로 처리해 결과가 같음을 검사했습니다. 다중 노드 클러스터는 아닙니다 | `src/metronome/bigdata`, [bigdata.md](docs/bigdata.md) |
@@ -118,10 +118,10 @@ metronome worker --registry registry/etth1  # 다른 터미널: 재학습 job �
 
 ## 문서
 
-[프로토콜(사전 등록)](docs/protocol.md) · [결과](docs/results.md) · [논문 재현](docs/reproduction.md) · [서비스·추론 최적화](docs/serving.md) ·
+[프로토콜(사전 등록)](docs/protocol.md) · [결과](docs/results.md) · [모델 개선 탐색](docs/model_search.md) · [논문 재현](docs/reproduction.md) · [서비스·추론 최적화](docs/serving.md) ·
 [대용량 처리](docs/bigdata.md) · [운영 런북](docs/operations.md) · [설계](docs/design.md) · [ADR](docs/adr/0001-fail-closed-registry.md) · [한계](docs/limitations.md)
 
 ## 주장하지 않는 것
 
-실제 고객·설비 데이터, 금액으로 환산한 재학습 비용, 다중 노드 클러스터, AWS·GCP·Azure 운영, TensorFlow 사용 경험, 모델 구조 탐색, 다인 협업 이력, 운영 SLA.
+실제 고객·설비 데이터, 금액으로 환산한 재학습 비용, 다중 노드 클러스터, AWS·GCP·Azure 운영, 다인 협업 이력, 운영 SLA.
 자세한 조건은 [docs/limitations.md](docs/limitations.md) 에 있습니다. 데이터의 권리는 각 제공자에게 있으며 코드는 MIT 입니다.
