@@ -69,10 +69,10 @@ Hourly·Weekly 는 8 MiB 보다 작아 1개입니다. 완료 태스크가 분할
   Spark 경로가 바뀔 때마다 같은 compose 를 다시 실행하고, 기준을 못 넘으면 실패합니다.
 - 시간은 참고입니다. 네 컨테이너가 vCPU 4개인 호스트 하나를 나눠 썼으므로 다중 노드의 속도를 뜻하지 않습니다.
   같은 driver 컨테이너에서 같은 8 MiB 분할로 돌린 `local[4]` 는 <!-- num:artifacts/bigdata/bigdata_cluster.json#local_same_splits/seconds:.0f -->1579<!-- /num --> s 로 같은 코어 수의 클러스터보다
-  느렸지만, 1회 측정이고 원인을 가려 보지 않아 주장하지 않습니다. 위 표의 Spark
-  <!-- num:artifacts/bigdata/bigdata.json#engines/2/median_seconds:.1f -->1232.2<!-- /num --> s 와도 실행 환경(호스트 venv, 기본 분할)이 달라 직접 비교하지 않습니다.
-- 한 호스트 위의 컨테이너 클러스터입니다. 실제 다중 노드에서 달라지는 것(네트워크 너머의 공유 저장소, 노드 장애와 태스크 재시도,
-  데이터 지역성)은 다루지 않았습니다.
+  느렸습니다. 1회 측정이라 참고값이고, 위 표의 Spark
+  <!-- num:artifacts/bigdata/bigdata.json#engines/2/median_seconds:.1f -->1232.2<!-- /num --> s 와는 실행 환경(호스트 venv, 기본 분할)이 달라 따로 읽습니다.
+- 한 호스트 위의 컨테이너 클러스터로, 검사 범위는 태스크 분배와 결과 일치입니다. 다중 노드에서 더해지는 요소(네트워크 너머의 공유 저장소,
+  노드 장애와 태스크 재시도, 데이터 지역성)는 그 환경에 같은 compose 를 올려 측정하는 단계입니다.
 
 재현: `metronome bigdata --repeats 3` (M4 는 고정 SHA-256 으로 내려받습니다).
 클러스터: 위 compose 명령(보고서는 driver 의 `/data/out/bigdata_cluster.json`).
