@@ -1,0 +1,56 @@
+# Spark standalone cluster for the M4 job (protocol P16, docs/bigdata.md).
+#
+#   docker compose -f docker-compose.spark.yml up --build --abort-on-container-exit --exit-code-from driver
+#
+# One master, two workers (2 cores, 3 GB each) and a driver in client mode, each in its own container
+# on one network. `sparkdata` is mounted at /data everywhere: the driver downloads M4 there (pinned
+# SHA-256), the executors read their splits from it and write Parquet back, standing in for HDFS or
+# object storage. The driver writes /data/out/bigdata_cluster.json and exits non-zero if the cluster
+# result differs from Polars or a worker ran less than a quarter of the tasks.
+x-spark: &spark
+  build:
+    context: .
+    dockerfile: Dockerfile.spark
+  image: metronome-spark:local
+  volumes:
+    - sparkdata:/data
+
+services:
+  spark-master:
+    <<: *spark
+    hostname: spark-master
+    command: ["spark-class", "org.apache.spark.deploy.master.Master",
+              "--host", "spark-master", "--port", "7077", "--webui-port", "8080"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/json/', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  spark-worker-1: &worker
+    <<: *spark
+    hostname: spark-worker-1
+    command: ["spark-class", "org.apache.spark.deploy.worker.Worker",
+              "--host", "spark-worker-1", "--cores", "2", "--memory", "3g", "spark://spark-master:7077"]
+    cpus: 2
+    depends_on:
+      spark-master: { condition: service_healthy }
+
+  spark-worker-2:
+    <<: *worker
+    hostname: spark-worker-2
+    command: ["spark-class", "org.apache.spark.deploy.worker.Worker",
+              "--host", "spark-worker-2", "--cores", "2", "--memory", "3g", "spark://spark-master:7077"]
+
+  driver:
+    <<: *spark
+    hostname: driver
+    command: ["metronome", "bigdata-cluster",
+              "--master", "spark://spark-master:7077", "--master-ui", "http://spark-master:8080",
+              "--workers", "2", "--raw-dir", "/data/raw", "--out-dir", "/data/out"]
+    depends_on:
+      spark-worker-1: { condition: service_started }
+      spark-worker-2: { condition: service_started }
+
+volumes:
+  sparkdata:

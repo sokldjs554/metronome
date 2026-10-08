@@ -386,6 +386,49 @@ def bigdata(
         )
 
 
+@app.command("bigdata-cluster")
+def bigdata_cluster(
+    master: str = "spark://spark-master:7077",
+    master_ui: str = "http://spark-master:8080",
+    workers: int = 2,
+    raw_dir: Path = RAW,
+    out_dir: Path = Path("artifacts/bigdata"),
+    local_dir: Path | None = None,
+    executor_cores: int = 2,
+    executor_memory: str = "2g",
+    partition_mib: int = 8,
+    local_reference: bool = True,
+) -> None:
+    """The M4 Spark job on a standalone cluster, checked against Polars (P16). Run as the compose driver."""
+    from metronome.bigdata.cluster import run_cluster_stage
+
+    rep = run_cluster_stage(
+        raw_dir,
+        out_dir,
+        master=master,
+        master_ui=master_ui,
+        n_workers=workers,
+        local_dir=local_dir,
+        executor_cores=executor_cores,
+        executor_memory=executor_memory,
+        partition_mib=partition_mib,
+        local_reference=local_reference,
+    )
+    c = rep["cluster"]
+    typer.echo(
+        f"cluster {c['seconds']:.1f}s cells={c['n_cells']:,} series={c['n_series']:,} agree={rep['agree']}"
+    )
+    for e in rep["executors"]:
+        typer.echo(f"  executor {e['id']} on {e['host']}: {e['completed_tasks']} tasks")
+    if "local_same_splits" in rep:
+        typer.echo(
+            f"local   {rep['local_same_splits']['seconds']:.1f}s (same splits, {rep['local_same_splits']['master']})"
+        )
+    if not rep["passed"]:
+        typer.echo(f"FAILED: agree={rep['agree']} distributed={rep['distributed']}", err=True)
+        raise typer.Exit(1)
+
+
 @app.command("mlflow-log")
 def mlflow_log(
     tracking_uri: str = "sqlite:///mlflow.db",
