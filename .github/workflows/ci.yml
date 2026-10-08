@@ -233,11 +233,15 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with: { python-version: "3.12", cache: pip }
-      - name: install metronome (training extras) and Airflow with its constraints
+      - name: install Airflow with its constraints, then metronome (training extras) on top
+        # Airflow first: its constraint file pins old typing-extensions/pydantic/protobuf, and applying
+        # it after metronome downgrades them under onnx and pydantic-core. The other order upgrades
+        # only what metronome needs, and the import check below proves Airflow still loads.
         run: |
+          pip install "apache-airflow==2.10.5" --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.12.txt"
           pip install torch --index-url $TORCH_INDEX
           pip install -e ".[train,export]"
-          pip install "apache-airflow==2.10.5" --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.12.txt"
+          pip check || true
       - name: the DAG imports cleanly
         run: |
           airflow db migrate > /dev/null
