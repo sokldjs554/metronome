@@ -162,6 +162,22 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  tensorflow:
+    # Keras DLinear vs PyTorch DLinear: identical outputs after weight transfer, and lockstep training
+    # (same init, same batch order, same recipe) ending at the same epoch within 1% (protocol P15).
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install torch --index-url $TORCH_INDEX && pip install "tensorflow-cpu>=2.16,<3" && pip install -e ".[train,dev]"
+      - run: python -c "import tensorflow as tf, torch; print('tensorflow', tf.__version__, 'torch', torch.__version__)"
+      - run: pytest -q -p no:cacheprovider tests/test_tf.py
+
   numbers:
     needs: lint
     runs-on: ubuntu-24.04

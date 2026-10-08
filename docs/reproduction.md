@@ -58,3 +58,25 @@ ETTh1 의 선형 모델은 시드에 민감합니다. 시드 2021 이 프로토�
 
 표의 `±3%` 열이 판정입니다. 벗어난 항목은 위 "구현에서 확인한 것"의 차이(초기화·배치 순서·마지막 배치·residual attention)와
 시드 분산으로 설명되는 범위인지 [results.md](results.md) 에 적습니다. 원논문 전체 벤치마크의 재현이 아닙니다.
+
+## TensorFlow 교차 재현 (protocol P15)
+
+같은 DLinear 를 TensorFlow/Keras 로 구현해(`src/metronome/tfmodels.py`) 프레임워크가 결과를 바꾸지 않는지 봤습니다.
+판정 기준은 실행 전에 [protocol.md](protocol.md) P15 로 고정했습니다. ETTh1, L=336, H=96, 표준 LTSF 분할, 시험 MSE.
+
+| 시드 | PyTorch (최선 epoch) | TensorFlow, PyTorch 초기값으로 함께 학습 | TensorFlow, 자체 초기화 |
+|---:|---:|---:|---:|
+| 0 | <!-- num:artifacts/tf/etth1_h96.json#runs/0/torch/test_mse:.6f -->0.376892<!-- /num --> (<!-- num:artifacts/tf/etth1_h96.json#runs/0/torch/best_epoch:d -->5<!-- /num -->) | <!-- num:artifacts/tf/etth1_h96.json#runs/0/tf_lockstep/test_mse:.6f -->0.376894<!-- /num --> (<!-- num:artifacts/tf/etth1_h96.json#runs/0/tf_lockstep/best_epoch:d -->5<!-- /num -->) | <!-- num:artifacts/tf/etth1_h96.json#runs/0/tf_independent/test_mse:.6f -->0.376886<!-- /num --> (<!-- num:artifacts/tf/etth1_h96.json#runs/0/tf_independent/best_epoch:d -->5<!-- /num -->) |
+| 1 | <!-- num:artifacts/tf/etth1_h96.json#runs/1/torch/test_mse:.6f -->0.371194<!-- /num --> (<!-- num:artifacts/tf/etth1_h96.json#runs/1/torch/best_epoch:d -->9<!-- /num -->) | <!-- num:artifacts/tf/etth1_h96.json#runs/1/tf_lockstep/test_mse:.6f -->0.371194<!-- /num --> (<!-- num:artifacts/tf/etth1_h96.json#runs/1/tf_lockstep/best_epoch:d -->9<!-- /num -->) | <!-- num:artifacts/tf/etth1_h96.json#runs/1/tf_independent/test_mse:.6f -->0.371206<!-- /num --> (<!-- num:artifacts/tf/etth1_h96.json#runs/1/tf_independent/best_epoch:d -->9<!-- /num -->) |
+| 2 | <!-- num:artifacts/tf/etth1_h96.json#runs/2/torch/test_mse:.6f -->0.371003<!-- /num --> (<!-- num:artifacts/tf/etth1_h96.json#runs/2/torch/best_epoch:d -->9<!-- /num -->) | <!-- num:artifacts/tf/etth1_h96.json#runs/2/tf_lockstep/test_mse:.6f -->0.371003<!-- /num --> (<!-- num:artifacts/tf/etth1_h96.json#runs/2/tf_lockstep/best_epoch:d -->9<!-- /num -->) | <!-- num:artifacts/tf/etth1_h96.json#runs/2/tf_independent/test_mse:.6f -->0.370988<!-- /num --> (<!-- num:artifacts/tf/etth1_h96.json#runs/2/tf_independent/best_epoch:d -->9<!-- /num -->) |
+
+- **가중치 이식:** PyTorch 초기 가중치를 Keras 로 옮겼을 때 같은 입력의 출력 차이 최대값은 <!-- num:artifacts/tf/etth1_h96.json#summary/init_max_abs_diff_max:.1e -->0.0e+00<!-- /num --> 입니다.
+- **함께 학습:** 같은 초기값, 같은 배치 순서, 같은 레시피로 학습하면 시험 MSE 의 상대 차이가 시드별 최대 <!-- num:artifacts/tf/etth1_h96.json#summary/lockstep_mse_rel_diff_pct_max:.4f -->0.0007<!-- /num -->% 이고
+  조기 종료 epoch 도 모든 시드에서 같습니다.
+- **독립 학습:** Keras 자체 초기화로 학습한 시험 MSE 평균은 PyTorch 평균과 <!-- num:artifacts/tf/etth1_h96.json#summary/independent_vs_torch_pct:+.4f -->-0.0008<!-- /num -->% 차이입니다.
+  독립 학습도 배치 순서는 같은 시드의 numpy 순열로 같고 초기값만 다릅니다. DLinear 의 손실은 가중치에 대해 볼록한 선형 회귀라
+  초기값이 달라도 거의 같은 해에 도달합니다. 이 모델에서 결과를 정하는 것은 프레임워크가 아니라 데이터·레시피·배치 순서입니다.
+- 판정: **통과**(<!-- num:artifacts/tf/etth1_h96.json#summary/p15_pass -->True<!-- /num -->). 버전은 TensorFlow <!-- num:artifacts/tf/etth1_h96.json#versions/tensorflow -->2.21.0<!-- /num -->, PyTorch <!-- num:artifacts/tf/etth1_h96.json#versions/torch -->2.14.1+cu130<!-- /num --> 입니다.
+
+재현: `pip install -e ".[train,tf]"` 후 `metronome tf-repro --dataset etth1` (시드 3개 약 3분). 동등성과 함께 학습은 CI 의 `tensorflow` 잡이 매번 확인합니다.
+
