@@ -1,0 +1,71 @@
+name: pages
+
+# Publishes the self-contained browser replay (docs/demo/metronome-replay.html) on GitHub Pages, so the
+# demo is public without any server. Needs Pages enabled once (Settings > Pages > Source: GitHub Actions);
+# until then the build job notes how and the deploy job is skipped instead of failing.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/demo/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      enabled: "${{ steps.check.outputs.enabled }}"
+    steps:
+      - uses: actions/checkout@v7
+      - id: check
+        name: is GitHub Pages enabled with GitHub Actions as the source?
+        env:
+          GH_TOKEN: "${{ github.token }}"
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/pages" --jq .build_type > build_type.txt 2>/dev/null; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "pages build type: $(cat build_type.txt)"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages is off. Enable it once: Settings > Pages > Build and deployment > Source: GitHub Actions, then re-run this workflow."
+          fi
+      - name: assemble the site
+        run: |
+          mkdir -p _site/replay
+          cp docs/demo/metronome-replay.html _site/index.html
+          cp docs/demo/metronome-replay.html _site/replay/index.html
+          grep -q "<title>Metronome Replay</title>" _site/index.html
+          du -sh _site
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.check.outputs.enabled == 'true'
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.enabled == 'true'
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: "${{ steps.deployment.outputs.page_url }}"
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+      - name: the public page serves the replay
+        run: |
+          url="${{ steps.deployment.outputs.page_url }}"
+          for i in $(seq 1 20); do
+            curl -sf "$url" | grep -q "<title>Metronome Replay</title>" && { echo "live: $url"; echo "live: $url" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+            sleep 6
+          done
+          echo "::error::$url did not serve the replay page"; exit 1
