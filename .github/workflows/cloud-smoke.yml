@@ -22,6 +22,9 @@ permissions:
 
 jobs:
   render:
+    # On pull requests run only once the deployment URL is configured (repository variable RENDER_URL);
+    # scheduled and manual runs always run, so a missing or wrong URL fails loudly there.
+    if: github.event_name != 'pull_request' || vars.RENDER_URL != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -30,8 +33,13 @@ jobs:
       - name: wake the instance (a free instance sleeps after 15 idle minutes)
         run: |
           echo "target: $BASE"
-          for i in $(seq 1 30); do curl -sf -m 30 "$BASE/health" && break; sleep 10; done
-          curl -sf -m 30 "$BASE/health"
+          for i in $(seq 1 30); do
+            code=$(curl -s -m 30 -o health.txt -w "%{http_code}" "$BASE/health" || echo 000)
+            echo "attempt $i: HTTP $code $(head -c 120 health.txt 2>/dev/null)"
+            [ "$code" = "200" ] && break
+            sleep 10
+          done
+          [ "$code" = "200" ] || { echo "::error::$BASE/health never returned 200 (last HTTP $code). Is RENDER_URL the service's URL?"; exit 1; }
       - name: readiness, deployment contract, forecast, metrics
         run: |
           python3 - <<'PY'
