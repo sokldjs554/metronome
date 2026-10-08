@@ -9,6 +9,7 @@
 |---|---|---|
 | 공개 데모 | Render Blueprint 가 `render.yaml` 을 읽어 `Dockerfile.demo` 를 빌드합니다. 빌드 중에 고정 해시의 ETTh1 을 내려받아 v0001 을 학습합니다. main 에 머지되면 Render 가 다시 빌드합니다 | `cloud-smoke` 워크플로 |
 | 이미지 | main 에 코드·이미지 변경이 머지되면 `images` 워크플로가 서빙·worker 이미지를 GHCR 에 `sha-<커밋>` 과 `latest` 로 게시합니다 | 워크플로 요약의 이미지 이름 |
+| 브라우저 리플레이 | main 의 `docs/demo/metronome-replay.html` 이 바뀌면 `pages` 워크플로가 GitHub Pages(https://sokldjs554.github.io/metronome/)에 배포하고, 공개 주소가 페이지를 내주는지 확인합니다. 서버가 없어 Render 와 무관하게 열립니다 | `pages` 워크플로 요약의 live 주소 |
 | 두 컨테이너 | `docker compose run --rm init` 후 `docker compose up api worker`. CI 의 `compose` 잡이 같은 절차를 매번 실행합니다 | `/ready`, `/v1/events` |
 
 배포가 끝나면 `cloud-smoke` 를 수동 실행합니다(Actions → cloud-smoke → Run workflow). 대상 주소는 저장소 변수 `RENDER_URL` 이고,
