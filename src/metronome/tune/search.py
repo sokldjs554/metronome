@@ -217,12 +217,23 @@ class _Tracker:
         except ImportError:
             return
         mlflow.set_tracking_uri(uri)
-        mlflow.set_experiment(experiment)
+        for attempt in range(5):  # two searches may create the sqlite schema at the same moment
+            try:
+                mlflow.set_experiment(experiment)
+                break
+            except Exception as exc:  # tracking must never stop a search
+                if attempt == 4:
+                    print(f"mlflow disabled: {exc}")
+                    return
+                time.sleep(2.0 * (attempt + 1))
         self._mlflow, self.enabled = mlflow, True
 
     def log(self, name: str, params: dict[str, Any], metrics: dict[str, float]) -> None:
         if not self.enabled:
             return
-        with self._mlflow.start_run(run_name=name):
-            self._mlflow.log_params(params)
-            self._mlflow.log_metrics(metrics)
+        try:
+            with self._mlflow.start_run(run_name=name):
+                self._mlflow.log_params(params)
+                self._mlflow.log_metrics(metrics)
+        except Exception as exc:  # a locked tracking DB loses one record, not the search
+            print(f"mlflow log failed for {name}: {exc}")
