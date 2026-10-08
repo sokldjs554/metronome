@@ -1,0 +1,6 @@
+# Every change is reviewed by the maintainer; the experiment protocol and the serving path are called out
+# so a PR that touches them is never merged without an explicit look.
+*                         @sokldjs554
+/docs/protocol.md         @sokldjs554
+/src/metronome/serving/   @sokldjs554
+/.github/workflows/       @sokldjs554
