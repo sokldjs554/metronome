@@ -1,0 +1,138 @@
+name: infra
+
+# The Azure deployment as code (infra/azure). Pull requests check formatting and validity without
+# touching Azure. On main and on demand the job logs in with the same keyless identity as the azure
+# workflow, imports the three live resources into the Terraform state if they are not there yet, and
+# runs `terraform plan`: a plan with changes fails the job, because the point of the file is that it
+# matches what is running. `apply` happens only when asked for by hand.
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra.yml"
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply the plan (default: plan only, fail on drift)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: infra
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+  TF_VERSION: "1.9.8"
+  RESOURCE_GROUP: metronome-rg
+  LOCATION: koreacentral
+  ENVIRONMENT: metronome-env
+  APP: metronome-demo
+  STATE_CONTAINER: tfstate
+
+defaults:
+  run:
+    working-directory: infra/azure
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - run: terraform fmt -check -recursive -diff
+      - run: terraform init -backend=false
+      - run: terraform validate
+
+  plan:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+      ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+      ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: azure/login@v2
+        with:
+          client-id: "${{ secrets.AZURE_CLIENT_ID }}"
+          tenant-id: "${{ secrets.AZURE_TENANT_ID }}"
+          subscription-id: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+      - name: state storage (created once, inside the same resource group)
+        id: state
+        run: |
+          sub=$(az account show --query id -o tsv)
+          account="stmetronome$(echo "$sub" | tr -d - | cut -c1-12)"
+          if ! az storage account show -g "$RESOURCE_GROUP" -n "$account" -o none 2>/dev/null; then
+            az storage account create -g "$RESOURCE_GROUP" -n "$account" -l "$LOCATION" --sku Standard_LRS \
+              --kind StorageV2 --allow-blob-public-access false --min-tls-version TLS1_2 -o none
+          fi
+          key=$(az storage account keys list -g "$RESOURCE_GROUP" -n "$account" --query "[0].value" -o tsv)
+          echo "::add-mask::$key"
+          az storage container create --account-name "$account" --account-key "$key" -n "$STATE_CONTAINER" -o none
+          echo "account=$account" >> "$GITHUB_OUTPUT"
+          echo "ARM_ACCESS_KEY=$key" >> "$GITHUB_ENV"
+      - name: terraform init
+        run: |
+          terraform init -reconfigure \
+            -backend-config="resource_group_name=$RESOURCE_GROUP" \
+            -backend-config="storage_account_name=${{ steps.state.outputs.account }}"
+      - name: import the live resources into the state when they are not there yet
+        run: |
+          sub=$(az account show --query id -o tsv)
+          base="/subscriptions/$sub/resourceGroups/$RESOURCE_GROUP"
+          import() { terraform state list 2>/dev/null | grep -qx "$1" || terraform import "${@:3}" "$1" "$2"; }
+          law=$(az monitor log-analytics workspace list -g "$RESOURCE_GROUP" --query "[0].name" -o tsv)
+          echo "LAW_NAME=$law" >> "$GITHUB_ENV"
+          vars=(-var "log_analytics_workspace_name=$law")
+          import azurerm_resource_group.rg "$base" "${vars[@]}"
+          import azurerm_container_app_environment.env "$base/providers/Microsoft.App/managedEnvironments/$ENVIRONMENT" "${vars[@]}"
+          import azurerm_container_app.demo "$base/providers/Microsoft.App/containerApps/$APP" "${vars[@]}"
+          terraform state list
+      - name: terraform plan (drift fails the job)
+        id: plan
+        run: |
+          set +e
+          terraform plan -detailed-exitcode -no-color -var "log_analytics_workspace_name=$LAW_NAME" -out=tfplan | tee plan.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          {
+            echo "### terraform plan (exit $code; 0 = no changes, 2 = drift)"
+            echo '```'
+            tail -n 60 plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" = "2" ] && [ "${{ inputs.apply }}" != "true" ]; then
+            echo "::error::infra/azure does not match the live deployment (see the plan above). Fix the code or run with apply=true."
+            exit 1
+          fi
+          [ "$code" = "0" ] || [ "$code" = "2" ]
+      - name: live environment and app, for diagnosing drift
+        if: always()
+        run: |
+          az containerapp env show -g "$RESOURCE_GROUP" -n "$ENVIRONMENT" -o json | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps({'workloadProfiles': d['properties'].get('workloadProfiles'), 'appLogsConfiguration': d['properties'].get('appLogsConfiguration')}, indent=1))"
+          az containerapp show -g "$RESOURCE_GROUP" -n "$APP" -o json | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['properties']; print(json.dumps({'workloadProfileName': p.get('workloadProfileName'), 'ingress': p['configuration'].get('ingress'), 'scale': p['template'].get('scale'), 'container': p['template']['containers'][0]}, indent=1))"
+      - name: terraform apply (manual runs with apply=true only)
+        if: inputs.apply == true && steps.plan.outputs.exitcode == '2'
+        run: terraform apply -no-color tfplan
