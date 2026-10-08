@@ -1,0 +1,54 @@
+{
+  "url": "http://127.0.0.1:8002",
+  "model": "v0001",
+  "per_client": 200,
+  "warmup": 20,
+  "request": {
+    "lookback": 336,
+    "channels": 7,
+    "horizon": 96
+  },
+  "levels": {
+    "1": {
+      "clients": 1,
+      "requests": 200,
+      "wall_s": 1.0628760540000144,
+      "requests_per_s": 188.16869497372014,
+      "http_ms": {
+        "p50": 5.316606500002763,
+        "p95": 6.443218349998858,
+        "p99": 7.812335890020551,
+        "mean": 5.309816109999019
+      }
+    },
+    "8": {
+      "clients": 8,
+      "requests": 1600,
+      "wall_s": 5.2708335389999945,
+      "requests_per_s": 303.55730040823084,
+      "http_ms": {
+        "p50": 24.052126999990264,
+        "p95": 47.67502909998881,
+        "p99": 60.084945930016715,
+        "mean": 25.8877916318753
+      }
+    },
+    "32": {
+      "clients": 32,
+      "requests": 6400,
+      "wall_s": 18.275424506000007,
+      "requests_per_s": 350.19706370699157,
+      "http_ms": {
+        "p50": 83.981124999994,
+        "p95": 166.0416762000025,
+        "p99": 219.8657864099883,
+        "mean": 90.20420070078126
+      }
+    }
+  },
+  "server": "metronome serve (uvicorn, 1 worker), loopback",
+  "client": "httpx sync, one thread and keep-alive connection per client, started together",
+  "machine": "x86_64",
+  "cpu_count": 4,
+  "python": "3.13.16"
+}

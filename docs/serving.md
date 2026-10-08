@@ -73,6 +73,22 @@ p95 <!-- num:artifacts/serving/http_latency.json#http_ms/p95:.2f -->5.87<!-- /nu
 (그중 모델 호출 p50 <!-- num:artifacts/serving/http_latency.json#model_call_ms/p50:.3f -->0.174<!-- /num --> ms).
 나머지는 JSON 파싱·검증·직렬화입니다. 운영 SLA 가 아니라 이 머신의 측정값입니다.
 
+### 동시 요청 (P13 확장, 사후)
+
+같은 서버(uvicorn 1 worker)에 클라이언트 N 개가 동시에 배치 1 요청을 보냅니다(`scripts/http_load.py`, 클라이언트당
+<!-- num:artifacts/serving/http_load.json#per_client -->200<!-- /num -->회, <!-- num:artifacts/serving/http_load.json#cpu_count -->4<!-- /num --> vCPU):
+
+| 동시 클라이언트 | 처리량 (req/s) | p50 (ms) | p95 (ms) | p99 (ms) |
+|---:|---:|---:|---:|---:|
+| 1 | <!-- num:artifacts/serving/http_load.json#levels/1/requests_per_s:.0f -->188<!-- /num --> | <!-- num:artifacts/serving/http_load.json#levels/1/http_ms/p50:.1f -->5.3<!-- /num --> | <!-- num:artifacts/serving/http_load.json#levels/1/http_ms/p95:.1f -->6.4<!-- /num --> | <!-- num:artifacts/serving/http_load.json#levels/1/http_ms/p99:.1f -->7.8<!-- /num --> |
+| 8 | <!-- num:artifacts/serving/http_load.json#levels/8/requests_per_s:.0f -->304<!-- /num --> | <!-- num:artifacts/serving/http_load.json#levels/8/http_ms/p50:.1f -->24.1<!-- /num --> | <!-- num:artifacts/serving/http_load.json#levels/8/http_ms/p95:.1f -->47.7<!-- /num --> | <!-- num:artifacts/serving/http_load.json#levels/8/http_ms/p99:.1f -->60.1<!-- /num --> |
+| 32 | <!-- num:artifacts/serving/http_load.json#levels/32/requests_per_s:.0f -->350<!-- /num --> | <!-- num:artifacts/serving/http_load.json#levels/32/http_ms/p50:.1f -->84.0<!-- /num --> | <!-- num:artifacts/serving/http_load.json#levels/32/http_ms/p95:.1f -->166.0<!-- /num --> | <!-- num:artifacts/serving/http_load.json#levels/32/http_ms/p99:.1f -->219.9<!-- /num --> |
+
+**한 프로세스는 300 req/s 안팎에서 포화합니다.** 클라이언트를 8 에서 32 로 늘려도 처리량은 <!-- num:artifacts/serving/http_load.json#levels/8/requests_per_s:.0f -->304<!-- /num --> 에서
+<!-- num:artifacts/serving/http_load.json#levels/32/requests_per_s:.0f -->350<!-- /num --> req/s 로 조금 오르고 p95 는 <!-- num:artifacts/serving/http_load.json#levels/8/http_ms/p95:.1f -->47.7<!-- /num --> 에서
+<!-- num:artifacts/serving/http_load.json#levels/32/http_ms/p95:.1f -->166.0<!-- /num --> ms 로 늘어납니다. 모델 호출은 0.2 ms 수준이라 병목은 요청당 JSON 처리와 단일 worker 의
+스레드 전환이며, 더 받으려면 uvicorn worker 수를 늘리거나(공유 레지스트리라 교체 검증은 프로세스마다 다시 일어남) 요청을 배치로 묶어야 합니다. 둘 다 하지 않았습니다.
+
 ## 배포 구성
 
 | 파일 | 내용 |
