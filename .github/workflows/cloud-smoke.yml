@@ -2,8 +2,8 @@ name: cloud-smoke
 
 # Checks a public deployment: wake the instance, then liveness, readiness, the deployment contract, a
 # real forecast, Prometheus metrics and the browser replay, with the latencies in the run summary.
-# Runs every 6 hours against the Render service (a failing run notifies the repository owner), on
-# demand against any URL, and from the azure workflow right after each deployment (workflow_call).
+# Runs every 6 hours against both live services, Render and Azure (a failing run notifies the
+# repository owner), on demand against any URL, and from the azure workflow after each deployment.
 on:
   schedule:
     - cron: "17 */6 * * *"
@@ -28,15 +28,21 @@ permissions:
   contents: read
 
 jobs:
-  render:
-    # Target: the url input, else the repository variable RENDER_URL, else the live public service
-    # (render.yaml's `metronome-demo`, deployed 2026-10-08). A wrong or dead URL fails the run.
+  check:
+    # Targets: the url input alone when one is given (manual run, or the azure workflow right after a
+    # deployment); otherwise both live services, Render (render.yaml) and Azure Container Apps (azure.yml),
+    # overridable with the repository variables RENDER_URL and AZURE_URL. A wrong or dead URL fails the run.
+    name: ${{ matrix.url }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        url: ${{ fromJSON(inputs.url && format('["{0}"]', inputs.url) || format('["{0}", "{1}"]', vars.RENDER_URL || 'https://metronome-demo.onrender.com', vars.AZURE_URL || 'https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io')) }}
     env:
-      BASE: "${{ inputs.url || vars.RENDER_URL || 'https://metronome-demo.onrender.com' }}"
+      BASE: ${{ matrix.url }}
     steps:
-      - name: wake the instance (a free instance sleeps after 15 idle minutes)
+      - name: wake the instance (Render sleeps after 15 idle minutes; Azure scales to zero)
         run: |
           echo "target: $BASE"
           for i in $(seq 1 30); do
@@ -45,7 +51,7 @@ jobs:
             [ "$code" = "200" ] && break
             sleep 10
           done
-          [ "$code" = "200" ] || { echo "::error::$BASE/health never returned 200 (last HTTP $code). Is RENDER_URL the service's URL?"; exit 1; }
+          [ "$code" = "200" ] || { echo "::error::$BASE/health never returned 200 (last HTTP $code). Is this the service's URL?"; exit 1; }
       - name: readiness, deployment contract, forecast, metrics
         run: |
           python3 - <<'PY'
