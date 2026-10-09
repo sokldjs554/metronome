@@ -1,0 +1,45 @@
+name: aws-probe
+
+# Read-only diagnosis, run by hand: which regions and services the account's organization policy
+# allows. Prints one table; creates nothing.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: regions x services
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text); echo "::add-mask::$ACCOUNT"
+          r() {  # region, command... -> ok | scp | iam | err
+            local region=$1; shift
+            if out=$(aws --region "$region" "$@" 2>&1); then echo ok
+            else case "$out" in *"service control policy"*) echo scp;; *AccessDenied*|*UnauthorizedOperation*) echo iam;; *"Could not connect"*) echo n/a;; *) echo err;; esac; fi
+          }
+          {
+            echo "| region | ec2 vpcs | ecs | lambda | lightsail | elbv2 | s3 | ecr | logs |"
+            echo "|---|---|---|---|---|---|---|---|---|"
+            for region in us-east-1 us-east-2 us-west-1 us-west-2 ap-northeast-1 ap-northeast-2 ap-northeast-3 ap-southeast-1 ap-southeast-2 ap-south-1 eu-west-1 eu-west-2 eu-central-1 eu-north-1 ca-central-1 sa-east-1; do
+              echo "| $region | $(r $region ec2 describe-vpcs --max-items 1) | $(r $region ecs list-clusters) | $(r $region lambda list-functions --max-items 1) | $(r $region lightsail get-regions) | $(r $region elbv2 describe-load-balancers) | $(r $region s3api list-buckets) | $(r $region ecr describe-repositories) | $(r $region logs describe-log-groups --limit 1) |"
+            done
+            echo
+            echo "| global | result |"; echo "|---|---|"
+            echo "| iam list-roles | $(r us-east-1 iam list-roles --max-items 1) |"
+            echo "| iam list-open-id-connect-providers | $(r us-east-1 iam list-open-id-connect-providers) |"
+            echo "| cloudfront list-distributions | $(r us-east-1 cloudfront list-distributions --max-items 1) |"
+            echo "| route53 list-hosted-zones | $(r us-east-1 route53 list-hosted-zones --max-items 1) |"
+            echo "| organizations describe-organization | $(r us-east-1 organizations describe-organization) |"
+            echo "| account get-region-opt-status (ap-northeast-2) | $(r us-east-1 account get-region-opt-status --region-name ap-northeast-2) |"
+            echo "| ec2 describe-regions (opted-in list) | $(r us-east-1 ec2 describe-regions --query 'Regions[].RegionName' --output text) |"
+          } | tee probes.md
+          { echo "### Region / service probes (ok = allowed, scp = denied by organization policy, iam = denied by IAM policy, n/a = no endpoint)"; cat probes.md; } >> "$GITHUB_STEP_SUMMARY"
