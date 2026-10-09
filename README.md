@@ -4,6 +4,14 @@
 
 ### 배포된 시계열 예측 모델을 언제 다시 학습할지, 데이터로 정하는 MLOps 프로젝트
 
+</div>
+
+> **쉽게 말하면.** 공장 설비의 온도나 전력 사용량처럼 시간에 따라 변하는 값을 미리 맞히는 프로그램(예측 모델)은 시간이 지나면 점점 안 맞게 됩니다.
+> 그러면 최근 데이터로 다시 가르쳐야 하는데, **"언제" 다시 가르칠지** 정하는 기준이 보통 없습니다. 이 프로젝트는 그 기준(매일 / 일주일마다 / 틀리기 시작할 때만)을
+> 실제 데이터로 비교해 정하고, 정한 대로 자동으로 다시 가르쳐서 새 모델로 바꿔 끼우는 서비스까지 만든 것입니다. 아래 화면에서 직접 눌러 볼 수 있습니다.
+
+<div align="center">
+
 [![ci](https://github.com/sokldjs554/metronome/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sokldjs554/metronome/actions/workflows/ci.yml)
 [![azure](https://github.com/sokldjs554/metronome/actions/workflows/azure.yml/badge.svg?branch=main)](https://github.com/sokldjs554/metronome/actions/workflows/azure.yml)
 [![cloud-smoke](https://github.com/sokldjs554/metronome/actions/workflows/cloud-smoke.yml/badge.svg?branch=main)](https://github.com/sokldjs554/metronome/actions/workflows/cloud-smoke.yml)
@@ -19,7 +27,7 @@
 
 </div>
 
-**결론 한 줄** — 재학습이 통하는 데이터(ETTh2)에서는 오차 감시 정책이 재학습 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/n_refits:.0f -->19<!-- /num -->회로 매일 재학습 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->0.98<!-- /num -->배를 얻고, 안 통하는 데이터(weather · electricity)는 배포 전에 걸러집니다. 그 결론대로 움직이는 서빙이 지금 Azure 와 AWS 에서 돌고 있습니다.
+**결론 한 줄** — 다시 가르쳐서 좋아지는 데이터(ETTh2)에서는, 틀리기 시작할 때만 다시 가르쳐도(1년에 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/n_refits:.0f -->19<!-- /num -->번) 매일 다시 가르치는 것(364번)이 주는 정확도 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->0.98<!-- /num -->배를 얻습니다. 다시 가르쳐도 소용없는 데이터(weather · electricity)는 서비스에 올리기 전에 미리 알 수 있습니다. 이 결론대로 움직이는 서비스가 지금 Azure 와 AWS 에서 돌고 있습니다.
 
 ![Metronome 데모 — 데이터 검사, 모델 계열 비교와 게이트, 원클릭 배포, 오차 감시와 무중단 교체, 재학습 정책](docs/assets/demo/demo.gif)
 
