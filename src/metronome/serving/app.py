@@ -149,6 +149,15 @@ class ServiceState:
                 "parity_max_abs_diff": model.verification["max_abs_diff"],
             }
 
+    def _record(self, version: str, record: dict[str, Any]) -> None:
+        """Keep the decision in memory and, when the registry is writable, next to the version. A
+        read-only registry mount (the serving container) must not turn a decision into an error."""
+        self.decisions.append(record)
+        try:
+            self.registry.record_gate(version, record)
+        except OSError as exc:
+            LOGGER.warning("cannot write the gate record for %s to %s: %s", version, self.registry.root, exc)
+
     def record_override(
         self, version: str, kind: str, via: str, activation: dict[str, Any]
     ) -> dict[str, Any]:
@@ -164,8 +173,7 @@ class ServiceState:
             "applied": True,
             "activation": activation,
         }
-        self.registry.record_gate(version, record)
-        self.decisions.append(record)
+        self._record(version, record)
         return record
 
     def promote(
@@ -201,8 +209,7 @@ class ServiceState:
                     "applied": False,
                     "activation": None,
                 }
-                self.registry.record_gate(version, refused)
-                self.decisions.append(refused)
+                self._record(version, refused)
                 raise
             manifest = self.registry.manifest(version)
             cutoff = manifest.get("provenance", {}).get("cutoff_row")
@@ -230,8 +237,7 @@ class ServiceState:
                 reason = "forced" if forced else ("gate" if record["decision"] == "promote" else "initial")
                 out["activation"] = self.activate(version, reason=reason)
                 out["applied"] = True
-            self.registry.record_gate(version, out)
-            self.decisions.append(out)
+            self._record(version, out)
             return out
 
     def request_retrain(self, reason: dict[str, Any]) -> dict[str, Any]:

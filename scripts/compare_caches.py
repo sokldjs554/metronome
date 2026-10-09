@@ -22,7 +22,9 @@ def compare(old_dir: Path, new_dir: Path, name: str) -> str:
     n = a.shape[0]
     tri = np.triu(np.ones((n, n), dtype=bool))  # days >= model day
     fwd_equal = np.array_equal(a[tri], b[tri]) and np.array_equal(old["sq_sum"][tri], new["sq_sum"][tri])
-    hashes = [m.get("state_sha256") for m in meta_old["days"]] == [m.get("state_sha256") for m in meta_new["days"]]
+    hashes = [m.get("state_sha256") for m in meta_old["days"]] == [
+        m.get("state_sha256") for m in meta_new["days"]
+    ]
     val = np.array_equal(old["val_mae_fixed"], new["val_mae_fixed"])
     back = int(meta_new.get("backward_days", 0))
     low = np.tril(np.ones((n, n), dtype=bool), k=-1)

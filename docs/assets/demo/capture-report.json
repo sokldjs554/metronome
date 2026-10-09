@@ -1,43 +1,172 @@
 {
  "url": "http://127.0.0.1:8003",
- "started": "2026-10-08T16:00:30Z",
+ "started": "2026-10-09T06:21:02Z",
  "first_version": "v0001",
  "csv_check": "문제 있음",
  "candidate": {
-  "job": "20261008T160033Z-050",
+  "job": "20261009T062111Z-917",
   "status": "done",
   "trigger": "candidate",
   "model": "linear",
   "max_epochs": 3,
-  "requested_at": 1791475233.0505962,
-  "started_at": 1791475236.2191997,
-  "finished_at": 1791475239.3688023,
-  "seconds": 3.1491462580002008,
+  "requested_at": 1791526871.917652,
+  "started_at": 1791526875.9279346,
+  "finished_at": 1791526880.628911,
+  "seconds": 4.700508564000302,
   "version": "v0002",
   "error": null,
   "cutoff_time": null,
   "metrics": {
    "val_mae_fixed": 0.37704363465309143,
-   "train_seconds": 1.9278609250000045,
+   "train_seconds": 3.108745135999925,
    "epochs": 3,
    "export_parity_max_abs_diff": 4.76837158203125e-07
   },
-  "active": false,
-  "better_than_active": false
+  "active": true,
+  "gate": {
+   "candidate": "v0002",
+   "champion": "v0001",
+   "decision": "promote",
+   "reason": "better",
+   "decided_at": "2026-10-09T06:21:26Z",
+   "cutoff_row": 17420,
+   "cutoff_time": "2018-06-26T19:00:00.000000000",
+   "window_days": 14,
+   "n_days": 10,
+   "n_origins": 240,
+   "origin_rows": [
+    17084,
+    17323
+   ],
+   "origin_times": [
+    "2018-06-12T20:00:00.000000000",
+    "2018-06-22T19:00:00.000000000"
+   ],
+   "candidate_mae": 0.3769696354866028,
+   "champion_mae": 0.3804957866668701,
+   "scale": "fixed",
+   "via": "dashboard",
+   "forced": false,
+   "applied": true,
+   "activation": {
+    "from": "v0001",
+    "to": "v0002",
+    "reason": "gate",
+    "parity_max_abs_diff": 4.76837158203125e-07
+   }
+  }
  },
- "gate": "게이트 거부: 후보 0.3770 ≥ 현재 0.3722 (val_mae_fixed). 강제로 올릴 수는 있습니다.",
- "forecast": "v0001 · 기준 시각 2018-06-26T19:00 · 왕복 9 ms (모델 0.46 ms) · 리플레이를 켜면 예측 뒤의 실제값도 그립니다",
+ "gate": "v0002 승격: 후보가 더 낫다 — 후보 v0002 0.3770 vs 현재 v0001 0.3805 (고정 척도), 같은 origin 240개(완결 10일, 2018-06-12T20:00 ~ 2018-06-22T19:00) · 2026-10-09 06:21:26 UTC",
+ "gate_decision": {
+  "candidate": "v0002",
+  "champion": "v0001",
+  "decision": "promote",
+  "reason": "better",
+  "decided_at": "2026-10-09T06:21:26Z",
+  "cutoff_row": 17420,
+  "cutoff_time": "2018-06-26T19:00:00.000000000",
+  "window_days": 14,
+  "n_days": 10,
+  "n_origins": 240,
+  "origin_rows": [
+   17084,
+   17323
+  ],
+  "origin_times": [
+   "2018-06-12T20:00:00.000000000",
+   "2018-06-22T19:00:00.000000000"
+  ],
+  "candidate_mae": 0.3769696354866028,
+  "champion_mae": 0.3804957866668701,
+  "scale": "fixed",
+  "via": "dashboard",
+  "forced": false,
+  "applied": true,
+  "activation": {
+   "from": "v0001",
+   "to": "v0002",
+   "reason": "gate",
+   "parity_max_abs_diff": 4.76837158203125e-07
+  }
+ },
+ "forecast": "v0002 · 기준 시각 2018-06-26T19:00 · 왕복 26 ms (모델 7.76 ms) · 리플레이를 켜면 예측 뒤의 실제값도 그립니다",
  "swap": {
-  "at": 1791475255.4887466,
-  "from": "v0001",
+  "at": 1791526913.4545157,
+  "from": "v0002",
   "to": "v0003",
-  "reason": "worker"
+  "reason": "gate"
  },
- "steps_to_swap": 23,
+ "steps_to_swap": 57,
  "swapped": true,
+ "decisions": [
+  {
+   "candidate": "v0002",
+   "champion": "v0001",
+   "decision": "promote",
+   "reason": "better",
+   "decided_at": "2026-10-09T06:21:26Z",
+   "cutoff_row": 17420,
+   "cutoff_time": "2018-06-26T19:00:00.000000000",
+   "window_days": 14,
+   "n_days": 10,
+   "n_origins": 240,
+   "origin_rows": [
+    17084,
+    17323
+   ],
+   "origin_times": [
+    "2018-06-12T20:00:00.000000000",
+    "2018-06-22T19:00:00.000000000"
+   ],
+   "candidate_mae": 0.3769696354866028,
+   "champion_mae": 0.3804957866668701,
+   "scale": "fixed",
+   "via": "dashboard",
+   "forced": false,
+   "applied": true,
+   "activation": {
+    "from": "v0001",
+    "to": "v0002",
+    "reason": "gate",
+    "parity_max_abs_diff": 4.76837158203125e-07
+   }
+  },
+  {
+   "candidate": "v0003",
+   "champion": "v0002",
+   "decision": "promote",
+   "reason": "better",
+   "decided_at": "2026-10-09T06:21:53Z",
+   "cutoff_row": 8929,
+   "cutoff_time": "2017-07-08T00:00:00.000000000",
+   "window_days": 14,
+   "n_days": 10,
+   "n_origins": 240,
+   "origin_rows": [
+    8593,
+    8832
+   ],
+   "origin_times": [
+    "2017-06-24T01:00:00.000000000",
+    "2017-07-04T00:00:00.000000000"
+   ],
+   "candidate_mae": 0.3908799886703491,
+   "champion_mae": 0.40809470415115356,
+   "scale": "fixed",
+   "via": "worker",
+   "forced": false,
+   "applied": true,
+   "activation": {
+    "from": "v0002",
+    "to": "v0003",
+    "reason": "gate",
+    "parity_max_abs_diff": 7.152557373046875e-07
+   }
+  }
+ ],
  "monitor": {
   "active": "v0003",
-  "rolling": 0.5895696832310585,
+  "rolling": 0.5539062220071044,
   "alarms": 1,
   "resolved": 410
  },
