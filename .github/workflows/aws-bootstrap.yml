@@ -79,9 +79,9 @@ jobs:
             --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 
           ensure_role "$INFRA_ROLE" "$(service_trust ecs.amazonaws.com)"
-          infra_policy=$(aws iam list-policies --scope AWS \
-            --query "Policies[?PolicyName=='AmazonECSInfrastructureRoleforExpressGatewayServices'].Arn | [0]" --output text)
-          [ -n "$infra_policy" ] && [ "$infra_policy" != "None" ] || { echo "::error::managed policy AmazonECSInfrastructureRoleforExpressGatewayServices not found"; exit 1; }
+          infra_policy=arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices
+          aws iam get-policy --policy-arn "$infra_policy" >/dev/null \
+            || { echo "::error::managed policy $infra_policy not found in this partition"; exit 1; }
           aws iam attach-role-policy --role-name "$INFRA_ROLE" --policy-arn "$infra_policy"
 
           if [ "$OIDC" != "yes" ]; then
