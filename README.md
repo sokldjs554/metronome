@@ -13,12 +13,13 @@
 ![onnx](https://img.shields.io/badge/ONNX_Runtime-005CED?logo=onnx&logoColor=white)
 ![fastapi](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![azure](https://img.shields.io/badge/Azure_Container_Apps-0078D4?logo=microsoftazure&logoColor=white)
+![aws](https://img.shields.io/badge/AWS_ECS_Fargate-FF9900?logo=amazonwebservices&logoColor=white)
 
-**[Azure 데모](https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io)** · **[Render 데모](https://metronome-demo.onrender.com)** · **[브라우저 리플레이(서버 없음)](https://sokldjs554.github.io/metronome/)** · [API 문서](https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io/docs) · [실험 리포트](docs/results.md) — 서버 데모는 첫 접속에 1분 안팎
+**[Azure 데모](https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io)** · **[AWS 데모](https://me-f271425dbfde4ebf8bb88ef9e5d409c7.ecs.ap-southeast-2.on.aws)** · **[Render 데모](https://metronome-demo.onrender.com)** · **[브라우저 리플레이(서버 없음)](https://sokldjs554.github.io/metronome/)** · [API 문서](https://metronome-demo.politeground-6dc99748.koreacentral.azurecontainerapps.io/docs) · [실험 리포트](docs/results.md) — 서버 데모는 첫 접속에 1분 안팎
 
 </div>
 
-**결론 한 줄** — 재학습이 통하는 데이터(ETTh2)에서는 오차 감시 정책이 재학습 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/n_refits:.0f -->19<!-- /num -->회로 매일 재학습 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->0.98<!-- /num -->배를 얻고, 안 통하는 데이터(weather · electricity)는 배포 전에 걸러집니다. 그 결론대로 움직이는 서빙이 지금 Azure 에서 돌고 있습니다.
+**결론 한 줄** — 재학습이 통하는 데이터(ETTh2)에서는 오차 감시 정책이 재학습 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/n_refits:.0f -->19<!-- /num -->회로 매일 재학습 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->0.98<!-- /num -->배를 얻고, 안 통하는 데이터(weather · electricity)는 배포 전에 걸러집니다. 그 결론대로 움직이는 서빙이 지금 Azure 와 AWS 에서 돌고 있습니다.
 
 ![Metronome 데모 — 데이터 검사, 모델 계열 비교와 게이트, 원클릭 배포, 오차 감시와 무중단 교체, 재학습 정책](docs/assets/demo/demo.gif)
 
@@ -33,7 +34,7 @@
 | 문제 | 배포한 모델을 "언제 다시 학습할지"는 보통 감으로 정합니다. 너무 자주 하면 비용이, 너무 드물면 오차가 쌓입니다 |
 | 접근 | 매일 콜드 재학습한 모델을 **캐시**로 만들어 두고 그 위에서 정책 20개를 시뮬레이션합니다. 가설과 판정 기준은 실행 전에 커밋([프로토콜](docs/protocol.md)) |
 | 데이터 | 공개 벤치마크 4개(ETTh1 · ETTh2 · Jena weather · UCI electricity 20채널)를 시간순으로 재생. 대용량 처리는 M4 <!-- num:artifacts/bigdata/bigdata.json#engines/0/n_series:, -->100,000<!-- /num --> 시계열 |
-| 현재 상태 | Azure Container Apps · Render 에 배포, 6시간마다 자동 점검, CI 12개 잡 통과, 테스트 99개 |
+| 현재 상태 | Azure Container Apps · AWS ECS(Fargate) · Render 에 배포, 6시간마다 자동 점검, CI 12개 잡 통과, 테스트 99개 |
 
 ## 2. 핵심 결과
 
@@ -88,7 +89,7 @@ flowchart LR
 | 레지스트리 | ONNX + 해시 + 참조 입출력. 검증에 실패한 모델은 올라가지 않음(fail-closed) | `serving/registry.py`, [ADR 0001](docs/adr/0001-fail-closed-registry.md) |
 | 서빙 | ONNX Runtime API(이미지에 torch 없음), 원자적 포인터 교체, Prometheus 지표 | `serving/app.py`, `serving/engine.py` |
 | 감시 · 재학습 | 검출기 3종(비율 · Page–Hinkley · ADWIN), worker 의 학습 → ONNX → parity → 등록, 승격 게이트, Airflow DAG | `serving/monitor.py`, `serving/worker.py`, `dags/` |
-| 배포 · 운영 | Docker 이미지 3종, compose, Kubernetes, Azure Container Apps(OIDC 자동 배포, Terraform), Render, 6시간 점검 | `.github/workflows`, `deploy/k8s`, `infra/azure` |
+| 배포 · 운영 | Docker 이미지 3종, compose, Kubernetes, Azure Container Apps(OIDC 자동 배포, Terraform), AWS ECS Express Mode(Fargate, 자동 배포), Render, 6시간 점검 | `.github/workflows`, `deploy/k8s`, `infra/azure` |
 
 **왜 이렇게 했나** — *사전 등록*: 기준을 먼저 커밋해야 기각된 가설(H1·H3)도 그대로 남습니다. *재학습 캐시*: 정책마다 새로 학습하면 비교가 안 되므로 매일 한 번만 학습해 두고 모든 정책이 같은 모델을 씁니다. *ONNX Runtime*: 서빙 이미지에서 torch 를 빼고 PyTorch 출력과의 parity 를 등록 때와 활성화 때 검증합니다. *fail-closed*: 해시나 참조 입출력이 어긋나면 교체를 거부하고 현재 모델을 유지합니다.
 
@@ -121,7 +122,7 @@ flowchart LR
 
 | 항목 | 내용 |
 |---|---|
-| 배포 | main 에 머지되면 `azure` 워크플로가 이미지를 GHCR 에 게시하고, 키 없는 OIDC 로그인으로 Azure Container Apps(한국 중부, 요청 없으면 0대)를 갱신한 뒤 새 리비전이 건강한지 확인합니다. Render 는 블루프린트로 같은 이미지를 빌드 |
+| 배포 | main 에 머지되면 `azure` 워크플로가 이미지를 GHCR 에 게시하고, 키 없는 OIDC 로그인으로 Azure Container Apps(한국 중부, 요청 없으면 0대)를 갱신한 뒤 새 리비전이 건강한지 확인합니다. AWS 는 `aws` 워크플로가 같은 GHCR 이미지로 ECS Express Mode(Fargate, 시드니)를 갱신하고 그 이미지로 안정될 때까지 확인합니다. Render 는 블루프린트로 같은 이미지를 빌드 |
 | 인프라 코드 | Azure 리소스 3개를 Terraform 으로 선언, `infra` 워크플로가 실제 리소스를 import 해 `plan` 변경 0건이어야 통과 |
 | 컨테이너 | 서빙·worker·데모 이미지, compose, Kubernetes 매니페스트(init Job + api·worker Deployment + 공유 PVC). CI 가 실제 컨테이너와 kind 클러스터에서 감시 → 재학습 → 교체 루프를 끝까지 실행 |
 | 감시 · 점검 | `/metrics`(Prometheus), `/v1/monitor`, `cloud-smoke` 가 6시간마다 두 주소의 health · ready · 예측 · 지표 · 리플레이를 점검 |
@@ -150,7 +151,7 @@ flowchart LR
 | Git 협업 · 소통 | 이슈 → 브랜치 → 템플릿 PR → CI → merge commit, CODEOWNERS · CONTRIBUTING, 결함과 대응을 사후 탐색으로 구분해 기록 |
 | PyTorch · TensorFlow | PyTorch 학습 루프, 같은 DLinear 를 Keras 로 교차 재현(가중치 이식 시 출력 일치) |
 | MLOps | 검증하는 레지스트리와 원자적 교체, MLflow, DVC, Airflow DAG(주 1회 재학습 + 게이트) |
-| 클라우드 운영 | Azure Container Apps 자동 배포(OIDC) + Render, Terraform(plan 0건), Kubernetes(kind), GHCR, 6시간 점검, 런북 |
+| 클라우드 운영 | Azure Container Apps 자동 배포(OIDC) + AWS ECS Fargate 자동 배포 + Render, Terraform(plan 0건), Kubernetes(kind), GHCR, 6시간 점검, 런북 |
 | 대규모 데이터 | M4 100,000 시계열을 Polars · pandas · PySpark 로 처리해 일치 검사, Spark standalone 클러스터(CI) |
 | 논문 재현 | DLinear · PatchTST 보고값 대조, 기준 밖 설정도 시드 편차와 함께 보고 |
 
