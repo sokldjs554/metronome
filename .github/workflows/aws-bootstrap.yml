@@ -143,6 +143,24 @@ jobs:
             echo "- account plan: $(echo "$plan" | tr -d '\n' | mask | head -c 600)"
             echo "- regions enabled for this account:"
             aws ec2 describe-regions --all-regions --query "Regions[].[RegionName,OptInStatus]" --output text 2>&1 | mask | sed 's/^/  - /'
+            echo "- roles another account can assume (an organization's management account gets one when it creates the account):"
+            aws iam list-roles --output json | ACCOUNT="$ACCOUNT" python3 -c '
+          import json, os, sys
+          me = os.environ["ACCOUNT"]
+          found = False
+          for role in json.load(sys.stdin)["Roles"]:
+              for st in role["AssumeRolePolicyDocument"].get("Statement", []):
+                  principal = st.get("Principal", {})
+                  aws = principal.get("AWS") if isinstance(principal, dict) else principal
+                  for a in ([] if not aws else aws if isinstance(aws, list) else [aws]):
+                      acct = a.split(":")[4] if a.startswith("arn:") else a
+                      if acct != me:
+                          found = True
+                          print("  - " + role["RoleName"] + ": trusted by another account")
+          if not found:
+              print("  - none")
+          '
+            echo "- IAM users: $(aws iam list-users --query 'Users[].UserName' --output text)"
           } | tee account.md
           cat account.md >> "$GITHUB_STEP_SUMMARY"
       - name: regions x services
