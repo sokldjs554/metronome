@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from metronome import __version__
 from metronome.data.freq import parse_duration
+from metronome.serving import gate
 from metronome.serving.registry import RegistryError, VerificationError
 from metronome.serving.replay import load_stream
 
@@ -45,7 +46,11 @@ class CandidateRequest(BaseModel):
 class PromoteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: str
-    force: bool = Field(default=False, description="activate even when the gate says no")
+    force: bool = Field(default=False, description="activate even when the gate says no (recorded as forced)")
+    reason: str = Field(default="dashboard", description="who asks: dashboard, worker, airflow-weekly, ...")
+    champion: str | None = Field(
+        default=None, description="the live version the caller compared against; refused if it changed"
+    )
 
 
 # ---- data --------------------------------------------------------------------------------------
@@ -212,9 +217,6 @@ def _job_records(state: ServiceState) -> list[dict[str, Any]]:
     if not jobs_dir.exists():
         return []
     active = state.active.model.version if state.active.model else None
-    champion_mae = (
-        state.active.model.manifest.get("metrics", {}).get("val_mae_fixed") if state.active.model else None
-    )
     out = []
     for path in sorted(jobs_dir.glob("*.json")):
         job = json.loads(path.read_text())
@@ -247,10 +249,9 @@ def _job_records(state: ServiceState) -> list[dict[str, Any]]:
                 "export_parity_max_abs_diff": metrics.get("export_parity_max_abs_diff"),
             }
             rec["active"] = version == active
-            mae = metrics.get("val_mae_fixed")
-            rec["better_than_active"] = (
-                None if mae is None or champion_mae is None or version == active else bool(mae < champion_mae)
-            )
+            # The gate's own record (same windows, same scale for both models); never a comparison
+            # of this candidate's validation MAE with a champion number from another period.
+            rec["gate"] = state.registry.gate_record(version)
         out.append(rec)
     return out
 
@@ -401,6 +402,14 @@ def add_workbench_routes(app: FastAPI, state: ServiceState, require_key: Any) ->
                 if champion
                 else None,
                 "rolling_7d_mae": rolling,
+                "gate": state.registry.gate_record(champion.version) if champion else None,
+            },
+            "gate_rule": {
+                "window_days": gate.WINDOW_DAYS,
+                "per_day": state.per_day,
+                "horizon": state.deployment.horizon,
+                "scale": "fixed",
+                "text": "후보와 현재 모델을 후보의 학습 마감 전 14일 중 정답이 모두 도착한 날들의 같은 origin 에서 고정 척도로 비교",
             },
             "jobs": _job_records(state),
             "open_jobs": [p.stem for p in state.registry.open_jobs()],
@@ -421,37 +430,25 @@ def add_workbench_routes(app: FastAPI, state: ServiceState, require_key: Any) ->
 
     @app.post("/v1/candidates/promote", dependencies=[Depends(require_key)])
     def promote(req: PromoteRequest) -> Any:
+        """Integrity, then the gate (candidate vs the live model on the same resolved windows),
+        then the swap. 200 = went live, 409 = kept (the record says why), 422 = integrity failed."""
+        from metronome.serving.app import PromotionRefused
+
         try:
-            manifest = state.registry.manifest(req.version)
+            state.registry.manifest(req.version)
         except RegistryError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        champion = state.active.model
-        candidate_mae = manifest.get("metrics", {}).get("val_mae_fixed")
-        rolling = state.monitor.state().get("rolling_7d_mae")
-        champion_mae = (
-            rolling
-            if rolling is not None
-            else (champion.manifest.get("metrics", {}).get("val_mae_fixed") if champion else None)
-        )
-        decision = {
-            "candidate": req.version,
-            "candidate_val_mae": candidate_mae,
-            "champion": champion.version if champion else None,
-            "champion_mae": champion_mae,
-            "champion_mae_source": "rolling_7d_mae" if rolling is not None else "val_mae_fixed",
-            "promote": champion_mae is None or (candidate_mae is not None and candidate_mae < champion_mae),
-        }
-        if champion and req.version == champion.version:
-            raise HTTPException(status_code=409, detail={"message": "already active", **decision})
-        if not decision["promote"] and not req.force:
-            return JSONResponse(
-                status_code=409, content={"detail": "gate: candidate is not better", **decision}
-            )
         try:
-            activation = state.activate(req.version, reason="gate" if decision["promote"] else "forced")
+            record = state.promote(
+                req.version, via=req.reason, force=req.force, expected_champion=req.champion
+            )
+        except PromotionRefused as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except VerificationError as exc:
             raise HTTPException(status_code=422, detail=f"refused: {exc}") from exc
-        return {**decision, "activation": activation}
+        if not record["applied"]:
+            return JSONResponse(status_code=409, content={"detail": f"gate: {record['reason']}", **record})
+        return record
 
     @app.get("/v1/models/{version}")
     def model_detail(version: str) -> dict[str, Any]:
@@ -476,13 +473,17 @@ def add_workbench_routes(app: FastAPI, state: ServiceState, require_key: Any) ->
 
     @app.post("/v1/models/rollback", dependencies=[Depends(require_key)])
     def rollback() -> dict[str, Any]:
+        """Explicit return to the previous version: integrity check and swap, no gate; recorded as
+        `rollback` so it is never read as a gate pass."""
         prev = previous_version(state)
         if prev is None:
             raise HTTPException(status_code=409, detail="no earlier version to roll back to")
         try:
-            return {"rolled_back_to": prev, **state.activate(prev, reason="rollback")}
+            activation = state.activate(prev, reason="rollback")
         except VerificationError as exc:
             raise HTTPException(status_code=422, detail=f"refused: {exc}") from exc
+        state.record_override(prev, "rollback", "rollback", activation)
+        return {"rolled_back_to": prev, **activation}
 
     @app.get("/v1/replay/window")
     def window() -> dict[str, Any]:

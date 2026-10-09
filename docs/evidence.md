@@ -29,9 +29,9 @@ README 의 요약 표를 항목마다 구현 내용과 근거 파일로 풀어 �
 | 단계 | 화면에서 하는 일 | 뒤에서 도는 것 |
 |---|---|---|
 | 1 · [데이터](assets/demo/01-data.png) | 배포된 데이터의 출처(URL·SHA-256)·분할·채널 통계·검사 결과를 보고, **내 CSV 를 올려** 같은 검사(중복·역행·간격·결측·상수 채널)를 돌려 봅니다 | `GET /v1/data/profile`, `POST /v1/data/validate` → `data.schema.validate_frame` |
-| 2 · [모델 비교](assets/demo/02-models.png) | 같은 분할에서 비교한 모델 계열(naive → Linear → DLinear → PatchTST)의 시험 오차·파라미터·학습 시간을 보고, 계열을 골라 **후보를 학습**합니다. 게이트는 후보의 검증 MAE 가 현재 모델보다 낮을 때만 승격합니다 | `GET /v1/leaderboard`, `POST /v1/candidates` → worker 가 학습·ONNX·parity·등록, `POST /v1/candidates/promote` |
+| 2 · [모델 비교](assets/demo/02-models.png) | 같은 분할에서 비교한 모델 계열(naive → Linear → DLinear → PatchTST)의 시험 오차·파라미터·학습 시간을 보고, 계열을 골라 **후보를 학습**합니다. 승격은 무결성 검사 뒤 후보와 현재 모델을 후보의 학습 마감 전 14일 중 정답이 다 도착한 날들의 같은 origin 에서 고정 척도로 비교해 후보가 더 낮을 때만 하고, 결정 시각·구간·표본 수·두 MAE·사유를 기록합니다 | `GET /v1/leaderboard`, `POST /v1/candidates` → worker 가 학습·ONNX·parity·등록, `POST /v1/candidates/promote` |
 | 3 · [배포](assets/demo/03-deploy.png) | 버전 표에서 **한 번 눌러 활성화·롤백**, 모델 카드(학습 구간·지표·해시·입출력 계약) 열기, 지금 시점에서 **예측을 호출**해 실제값과 겹쳐 보기 | `POST /v1/models/{v}/activate`(해시·참조 입출력 재검증), `POST /v1/models/rollback`, `GET /v1/models/{v}/card`, `POST /v1/forecast` |
-| 4 · [감시 · 재학습](assets/demo/04-monitor.png) | ETTh1 의 마지막 1년을 시간순으로 재생합니다. 검출기(비율·Page–Hinkley·ADWIN)가 울리면 재학습이 요청되고, worker 가 등록한 새 버전을 API 가 **검증한 뒤 포인터만 바꿉니다**. 교체 중 요청은 하나도 실패하지 않습니다(테스트로 고정) | `POST /v1/replay/*`, `POST /v1/observe`, `GET /v1/monitor`, `GET /metrics` |
+| 4 · [감시 · 재학습](assets/demo/04-monitor.png) | ETTh1 의 마지막 1년을 시간순으로 재생합니다. 검출기(비율·Page–Hinkley·ADWIN)가 울리면 재학습이 요청되고, worker 가 등록한 새 버전을 API 가 **검증하고 같은 완결 구간에서 현재 모델과 비교해 더 나을 때만 포인터를 바꿉니다**(결정은 `gate.json` 과 `/v1/events` 에 기록). 교체 중 요청은 하나도 실패하지 않습니다(테스트로 고정) | `POST /v1/replay/*`, `POST /v1/observe`, `GET /v1/monitor`, `GET /metrics` |
 | 5 · [재학습 정책](assets/demo/05-policy.png) | 이 데이터셋에서 어떤 재학습 정책이 좋은지(오프라인 실험, 사전 등록) 보고, 그 정책으로 재생을 시작합니다 | `static/evidence.json` ← `artifacts/cadence_summary.json`(숫자는 CI 가 대조) |
 
 [모바일](assets/demo/06-mobile.png) · [캡처 보고서](assets/demo/capture-report.json) · [검사용 예시 CSV](assets/demo/sample.csv). 캡처는 `scripts/capture_demo.py` 가 실제 서비스를 돌려 만들고, CI 의 `demo-image` 잡이 같은 흐름(프로필 → CSV 검사 → 후보 학습 → 게이트 → 카드 → 롤백)을 컨테이너에서 매번 실행합니다.

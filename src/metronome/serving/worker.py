@@ -2,8 +2,10 @@
 
 Polls the registry for retrain jobs written by the API, trains a replacement on the stream up to
 the job's cutoff, exports it to ONNX with a reference pair, registers it, and asks the API to
-activate it. The API verifies hashes and parity before swapping, so a bad export is refused and
-the previous model keeps serving.
+*promote* it: the API checks integrity (hashes, reference I/O, parity) and then the performance
+gate (candidate vs champion on the same resolved windows, serving/gate.py), so a bad export or a
+worse model never reaches the service and the previous model keeps serving. Without an API the
+worker runs the same gate itself before writing ACTIVE.
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ LOGGER = logging.getLogger("metronome.worker")
 class WorkerConfig:
     registry_root: Path
     stream_path: Path
-    api_url: str | None = None  # when None, activate by writing ACTIVE directly
+    api_url: str | None = None  # when None, run the gate here and write ACTIVE directly
     api_key: str | None = None
     model: str = "dlinear"
     max_epochs: int = 10
@@ -36,7 +38,7 @@ class WorkerConfig:
     seed: int = 0
     threads: int = 1
     poll_seconds: float = 2.0
-    activate: bool = True  # False: register only; something else (a gate) decides about promotion
+    activate: bool = True  # False: register only; the caller asks the API's gate later
 
 
 def train_replacement(
@@ -174,17 +176,20 @@ def process_job(cfg: WorkerConfig, job_path: Path) -> dict[str, Any]:
     if not activate:
         activation = {"skipped": True, "reason": "activation left to the caller"}
     elif cfg.api_url:
+        # The gate answers 200 (promoted) or 409 (kept: worse, tie or too little evidence); both
+        # are normal outcomes of a job. 422 means the export failed integrity and stays out.
         headers = {"X-API-Key": cfg.api_key} if cfg.api_key else {}
         resp = httpx.post(
-            f"{cfg.api_url}/v1/models/{version}/activate",
-            params={"reason": "worker"},
+            f"{cfg.api_url}/v1/candidates/promote",
+            json={"version": version, "reason": "worker"},
             headers=headers,
-            timeout=60,
+            timeout=120,
         )
-        resp.raise_for_status()
+        if resp.status_code not in (200, 409):
+            resp.raise_for_status()
         activation = resp.json()
     else:
-        activation = registry.activate(version)
+        activation = promote_locally(registry, version, values, ts, cutoff, via="worker")
     registry.update_job(
         job_path,
         status="done",
@@ -195,6 +200,36 @@ def process_job(cfg: WorkerConfig, job_path: Path) -> dict[str, Any]:
     )
     LOGGER.info("job %s -> %s (%.1fs)", job["job_id"], version, time.perf_counter() - t0)
     return {"job": job["job_id"], "version": version, "metrics": metrics, "activation": activation}
+
+
+def promote_locally(
+    registry: Registry, version: str, values: np.ndarray, ts: np.ndarray, cutoff: int, *, via: str
+) -> dict[str, Any]:
+    """The API's promotion in a process without an API: integrity, then the gate, then ACTIVE."""
+    from metronome.data.freq import parse_duration
+    from metronome.serving import gate
+
+    dep = registry.deployment()
+    per_day = round(86400.0 / parse_duration(dep.freq).total_seconds())
+    registry.verify(version)
+    record = gate.evaluate(
+        registry,
+        values,
+        ts,
+        candidate=version,
+        champion=registry.active(),
+        cutoff_row=cutoff,
+        per_day=per_day,
+    ).to_dict()
+    applied = record["decision"] in ("promote", "initial")
+    out: dict[str, Any] = {**record, "via": via, "forced": False, "applied": applied, "activation": None}
+    if applied:
+        out["activation"] = {
+            **registry.activate(version),
+            "reason": "gate" if record["decision"] == "promote" else "initial",
+        }
+    registry.record_gate(version, out)
+    return out
 
 
 def run_worker(cfg: WorkerConfig, *, once: bool = False, max_jobs: int | None = None) -> list[dict[str, Any]]:

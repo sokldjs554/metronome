@@ -117,16 +117,29 @@ def test_replay_triggers_retrain_and_worker_hot_swaps(client: TestClient, deploy
     cfg = WorkerConfig(registry_root=root, stream_path=root / "stream.npz", max_epochs=1, threads=1)
     done = run_worker(cfg, once=True)
     assert done and done[0]["version"] == "v0002"
+    # Without an API the worker runs the same gate itself: integrity, then candidate vs champion on
+    # the same resolved windows before the job's cutoff; ACTIVE moves only on a pass.
+    record = done[0]["activation"]
+    assert record["decision"] in {"promote", "reject", "hold"} and record["via"] == "worker"
+    assert (
+        record["n_origins"] == 13 * 24 and record["n_days"] == 13
+    )  # 14-day window, H=12 -> 1 block unresolved
+    assert record["cutoff_row"] == reg.manifest("v0002")["provenance"]["cutoff_row"]
+    assert reg.gate_record("v0002")["decision"] == record["decision"]
+    expected = "v0002" if record["applied"] else "v0001"
+    assert reg.active() == expected
     # the API process has not reloaded yet; `reload` syncs it with the registry's ACTIVE pointer
     assert client.get("/ready").json()["model"] == "v0001"
     reload = client.post("/v1/models/reload", headers={"X-API-Key": "secret"}).json()
-    assert reload["changed"] and reload["to"] == "v0002"
-    assert client.get("/ready").json()["model"] == "v0002"
+    assert reload["changed"] == record["applied"]
+    assert client.get("/ready").json()["model"] == expected
     moved = client.post("/v1/replay/step", json={"steps": 24}).json()
     assert moved["stepped"] == 24 and not moved["blocked_on_retrain"]
-    assert client.get("/v1/monitor").json()["judged_version"] == "v0002"
+    assert client.get("/v1/monitor").json()["judged_version"] == expected
     events = client.get("/v1/events").json()
-    assert events["swaps"][-1]["to"] == "v0002" and events["retrain_requests"]
+    assert events["retrain_requests"]
+    if record["applied"]:
+        assert events["swaps"][-1]["to"] == "v0002" and record["activation"]["reason"] == "gate"
     prov = reg.manifest("v0002")["provenance"]
     assert prov["trigger"] in {"schedule", "detector"} and prov["cutoff_row"] > L
 
@@ -334,7 +347,7 @@ def test_candidate_trains_by_family_then_gate_decides(deployment: dict) -> None:
 
     job = next(j for j in client.get("/v1/candidates").json()["jobs"] if j["job"] == req.json()["job"])
     assert job["status"] == "done" and job["version"] == version and job["model"] == "linear"
-    assert job["metrics"]["val_mae_fixed"] > 0 and job["better_than_active"] in (True, False)
+    assert job["metrics"]["val_mae_fixed"] > 0 and job["gate"] is None  # not evaluated yet
 
     detail = client.get(f"/v1/models/{version}").json()
     assert detail["active"] is False and detail["provenance"]["trigger"] == "candidate"
@@ -343,22 +356,34 @@ def test_candidate_trains_by_family_then_gate_decides(deployment: dict) -> None:
     assert f"모델 카드 — {version}" in card.text and "linear" in card.text and "SHA-256" in card.text
     assert client.get("/v1/models/v9999").status_code == 404
 
-    gate = client.post("/v1/candidates/promote", json={"version": version}, headers=key)
-    if job["better_than_active"]:
-        assert gate.status_code == 200 and gate.json()["promote"] is True
-        assert client.get("/ready").json()["model"] == version
+    gate = client.post("/v1/candidates/promote", json={"version": version, "champion": before}, headers=key)
+    body = gate.json()
+    assert body["candidate"] == version and body["champion"] == before and body["via"] == "dashboard"
+    assert body["n_origins"] > 0 and body["candidate_mae"] > 0 and body["champion_mae"] > 0
+    assert body["decision"] in ("promote", "reject", "hold") and body["reason"] in ("better", "worse", "tie")
+    if body["applied"]:
+        assert gate.status_code == 200 and body["decision"] == "promote"
+        assert body["activation"]["reason"] == "gate" and client.get("/ready").json()["model"] == version
     else:
-        assert gate.status_code == 409 and gate.json()["promote"] is False
+        assert gate.status_code == 409 and body["decision"] in ("reject", "hold") and not body["forced"]
         assert client.get("/ready").json()["model"] == before
         forced = client.post("/v1/candidates/promote", json={"version": version, "force": True}, headers=key)
         assert forced.status_code == 200 and forced.json()["activation"]["reason"] == "forced"
+        assert forced.json()["forced"] is True and forced.json()["decision"] == body["decision"]
         assert client.get("/ready").json()["model"] == version
+    job = next(j for j in client.get("/v1/candidates").json()["jobs"] if j["job"] == req.json()["job"])
+    assert job["gate"]["decision"] == body["decision"] and job["gate"]["n_origins"] == body["n_origins"]
     assert client.post("/v1/candidates/promote", json={"version": version}, headers=key).status_code == 409
+    # a decision computed against a champion that is no longer live is not applied
+    stale = client.post("/v1/candidates/promote", json={"version": before, "champion": "v0000"}, headers=key)
+    assert stale.status_code == 409 and "champion changed" in stale.json()["detail"]
 
     back = client.post("/v1/models/rollback", headers=key)
     assert back.status_code == 200 and back.json()["rolled_back_to"] == before
     assert client.get("/ready").json()["model"] == before
-    assert client.get("/v1/events").json()["swaps"][-1]["reason"] == "rollback"
+    events = client.get("/v1/events").json()
+    assert events["swaps"][-1]["reason"] == "rollback"
+    assert events["decisions"][-1]["decision"] == "rollback" and events["decisions"][-1]["forced"] is True
 
 
 def test_replay_window_feeds_the_forecast_chart(client: TestClient, deployment: dict) -> None:
@@ -373,3 +398,195 @@ def test_replay_window_feeds_the_forecast_chart(client: TestClient, deployment: 
     ).json()
     assert len(fc["forecast"]) == H and fc["timestamps"][0] == w["actual_timestamps"][0]
     assert client.get("/v1/workbench").json()["active"] == client.get("/ready").json()["model"]
+
+
+# ---- the promotion gate: integrity, then performance on the same resolved windows -------------
+def _register(root: Path, *, kind: str, cutoff_row: int | None = None, tag: str = "") -> str:
+    """Register a candidate without activating it. kind "trained": the worker's recipe, 3 epochs;
+    "naive": every weight zero, so the forecast is the last value (a valid ONNX export with a
+    reference pair that passes every integrity check); "bad": the same plus a bias of three
+    standard deviations on every step, deterministically worse than "naive"."""
+    import torch
+
+    from metronome.serving.worker import export_and_register, train_replacement
+
+    reg = Registry(root)
+    dep = reg.deployment()
+    ts, values = load_stream(root / "stream.npz")
+    cutoff = len(values)
+    if kind == "trained":
+        net, scaler, metrics = train_replacement(
+            values, cutoff, dep.lookback, dep.horizon, max_epochs=3, seed=0, fixed=dep.fixed_scaler
+        )
+    else:
+        from metronome.data.windows import Scaler
+        from metronome.models import build
+
+        net = build("dlinear", dep.lookback, dep.horizon, values.shape[1])
+        with torch.no_grad():
+            for name, param in net.named_parameters():
+                param.zero_()
+                if kind == "bad" and name.endswith("bias"):
+                    param.fill_(1.5)  # seasonal + trend biases add up to +3 sigma on every step
+        scaler = Scaler.fit(values[:cutoff]).to_dict()
+        metrics = {"val_mae_fixed": None, "epochs": 0, "train_seconds": 0.0}
+    decision_cutoff = cutoff if cutoff_row is None else cutoff_row
+    provenance = {
+        "trigger": "test",
+        "cutoff_row": decision_cutoff,
+        "cutoff_time": str(ts[decision_cutoff - 1]),
+        "model": "dlinear",
+    }
+    return export_and_register(
+        reg, net, scaler, metrics, provenance, values, cutoff, root / "work" / f"t{tag}"
+    )
+
+
+@pytest.fixture
+def gated(deployment: dict, tmp_path: Path) -> dict:
+    """A copy of the deployment whose champion forecasts the last value (every weight zero), so a
+    trained candidate is strictly better and a biased one strictly worse: deterministic outcomes."""
+    import shutil
+
+    root = tmp_path / "registry"
+    shutil.copytree(deployment["root"], root)
+    reg = Registry(root)
+    weak = _register(root, kind="naive", tag="weak")
+    reg.activate(weak)
+    app = create_app(root, api_key="secret", threads=1)
+    client = TestClient(app)
+    assert client.get("/ready").json()["model"] == weak
+    return {"root": root, "client": client, "champion": weak, "key": {"X-API-Key": "secret"}}
+
+
+def test_gate_rejects_a_valid_but_worse_candidate_and_keeps_serving(gated: dict) -> None:
+    client, root, key = gated["client"], gated["root"], gated["key"]
+    worse = _register(root, kind="bad", tag="worse")  # passes integrity, forecasts worse
+    assert Registry(root).verify(worse)["onnx_sha256"]
+    r = client.post("/v1/candidates/promote", json={"version": worse, "reason": "worker"}, headers=key)
+    body = r.json()
+    assert r.status_code == 409 and body["decision"] in ("reject", "hold") and body["applied"] is False
+    assert body["n_days"] == 13 and body["n_origins"] == 13 * 24 and body["scale"] == "fixed"
+    assert body["origin_rows"][1] + H <= body["cutoff_row"], (
+        "every scored forecast was resolved at the cutoff"
+    )
+    assert client.get("/ready").json()["model"] == gated["champion"]
+    assert (
+        Registry(root).active() == gated["champion"] and Registry(root).gate_record(worse)["applied"] is False
+    )
+    hist = client.get("/v1/replay/window").json()["history"]
+    assert client.post("/v1/forecast", json={"history": hist}).json()["model_version"] == gated["champion"]
+
+
+def test_gate_promotes_a_better_candidate_only_after_integrity(gated: dict) -> None:
+    client, root, key = gated["client"], gated["root"], gated["key"]
+    better = _register(root, kind="trained", tag="better")
+    r = client.post("/v1/candidates/promote", json={"version": better, "reason": "worker"}, headers=key)
+    body = r.json()
+    assert r.status_code == 200 and body["decision"] == "promote" and body["reason"] == "better"
+    assert body["candidate_mae"] < body["champion_mae"] and body["forced"] is False
+    assert body["activation"]["reason"] == "gate" and body["activation"]["parity_max_abs_diff"] <= 1e-4
+    assert client.get("/ready").json()["model"] == better
+    record = Registry(root).gate_record(better)
+    assert record["applied"] and record["champion"] == gated["champion"] and record["via"] == "worker"
+
+
+def test_integrity_failure_keeps_the_champion_even_for_a_better_candidate(gated: dict) -> None:
+    client, root, key = gated["client"], gated["root"], gated["key"]
+    better = _register(root, kind="trained", tag="tampered")
+    with (root / "versions" / better / "model.onnx").open("ab") as fh:
+        fh.write(b"\\0")
+    r = client.post("/v1/candidates/promote", json={"version": better, "reason": "worker"}, headers=key)
+    assert r.status_code == 422 and "hash mismatch" in r.json()["detail"]
+    assert client.get("/ready").json()["model"] == gated["champion"]
+    record = Registry(root).gate_record(better)
+    assert (
+        record["decision"] == "refused" and record["reason"].startswith("integrity") and not record["applied"]
+    )
+    # the override path refuses it too: integrity is not optional
+    assert client.post(f"/v1/models/{better}/activate", headers=key).status_code == 422
+
+
+def test_gate_holds_without_a_full_resolved_window(gated: dict) -> None:
+    client, root, key = gated["client"], gated["root"], gated["key"]
+    early = _register(
+        root, kind="trained", cutoff_row=L + 24 * 10, tag="early"
+    )  # 10 days of history: no 14-day window
+    r = client.post("/v1/candidates/promote", json={"version": early, "reason": "worker"}, headers=key)
+    body = r.json()
+    assert r.status_code == 409 and body["decision"] == "hold" and body["reason"] == "insufficient_sample"
+    assert body["n_origins"] == 0 and body["candidate_mae"] is None and body["champion_mae"] is None
+    assert client.get("/ready").json()["model"] == gated["champion"]
+
+
+def test_forecasts_keep_flowing_through_reject_promote_and_rollback(gated: dict) -> None:
+    client, root, key = gated["client"], gated["root"], gated["key"]
+    worse = _register(root, kind="bad", tag="w2")
+    better = _register(root, kind="trained", tag="b2")
+    hist = client.get("/v1/replay/window").json()["history"]
+    failures: list[int] = []
+    versions: set[str] = set()
+    stop = threading.Event()
+
+    def hammer() -> None:
+        while not stop.is_set():
+            resp = client.post("/v1/forecast", json={"history": hist})
+            if resp.status_code != 200:
+                failures.append(resp.status_code)
+            else:
+                versions.add(resp.json()["model_version"])
+
+    threads = [threading.Thread(target=hammer, daemon=True) for _ in range(3)]
+    for t in threads:
+        t.start()
+    try:
+        assert client.post("/v1/candidates/promote", json={"version": worse}, headers=key).status_code == 409
+        assert client.post("/v1/candidates/promote", json={"version": better}, headers=key).status_code == 200
+        assert client.post("/v1/models/rollback", headers=key).status_code == 200
+    finally:
+        stop.set()
+        for t in threads:
+            t.join(timeout=30)
+    assert failures == [] and versions <= {gated["champion"], better}
+    assert client.get("/ready").json()["model"] == gated["champion"]
+
+
+def test_online_and_offline_gates_agree_on_the_same_models_and_data(gated: dict) -> None:
+    """Feed the live gate's per-origin errors into the offline cache format: the offline gate
+    (cadence/simulate.gate_decide) reproduces the same two MAEs and the same decision."""
+    from metronome.cadence.simulate import Cache, gate_decide
+    from metronome.serving import gate
+    from metronome.serving.registry import Registry as Reg
+
+    root, key, client = gated["root"], gated["key"], gated["client"]
+    candidate = _register(root, kind="trained", tag="agree")
+    online = client.post("/v1/candidates/promote", json={"version": candidate}, headers=key).json()
+    reg = Reg(root)
+    dep = reg.deployment()
+    _ts, values = load_stream(root / "stream.npz")
+    origins = np.arange(online["origin_rows"][0], online["origin_rows"][1] + 1)
+    fixed_std = np.asarray(dep.fixed_scaler["std"], dtype=np.float32)
+    per_day, window = 24, online["window_days"]
+    n = window + 1  # decision day D = window; the incumbent is day 0
+    abs_sum = np.full((n, n, values.shape[1]), np.nan)
+    for day, version in ((0, gated["champion"]), (window, candidate)):
+        err = gate.model_errors(reg, version, values, origins, dep.horizon, fixed_std)  # (N, H, C)
+        for block in range(online["n_days"]):
+            abs_sum[day, block] = err[block * per_day : (block + 1) * per_day].sum(axis=(0, 1))
+    cache = Cache(
+        name="from-online",
+        abs_sum=abs_sum,
+        sq_sum=abs_sum**2,
+        count=np.full(n, per_day),
+        train_seconds=np.ones(n),
+        val_mae_fixed=np.full(n, np.nan),
+        horizon=dep.horizon,
+        config={"seed": 0},
+        per_day=per_day,
+        backward_days=window,
+    )
+    offline = gate_decide(cache, window, 0)
+    assert offline.days == list(range(online["n_days"]))
+    assert offline.candidate_mae == pytest.approx(online["candidate_mae"], rel=1e-6)
+    assert offline.incumbent_mae == pytest.approx(online["champion_mae"], rel=1e-6)
+    assert offline.accept == online["applied"] and offline.reason == online["reason"]

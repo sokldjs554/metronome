@@ -1,14 +1,18 @@
 """FastAPI service: forecasts from the active ONNX model, residual monitoring, zero-downtime swaps.
 
 The process never trains. When the monitor (or a schedule) asks for a retrain, it writes a job
-into the registry and keeps serving the current model; a separate worker trains, registers and
-activates the replacement through this API.
+into the registry and keeps serving the current model; a separate worker trains, registers the
+replacement and asks this API to promote it. Promotion is two checks in order, integrity (hashes,
+reference I/O, parity) and the performance gate (serving/gate.py), and only then the atomic swap.
+An operator's activate, a rollback and a forced promotion bypass the gate; they are recorded as
+such, never as a gate pass.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from pathlib import Path
 from typing import Annotated, Any
@@ -30,6 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 from metronome import __version__
 from metronome.data.freq import parse_duration
+from metronome.serving import gate
 from metronome.serving.model import ActiveModel, ServingModel
 from metronome.serving.monitor import ResidualMonitor
 from metronome.serving.registry import Registry, RegistryError, VerificationError
@@ -66,6 +71,10 @@ class ReplayStepRequest(BaseModel):
     steps: int = Field(default=24, ge=1, le=24 * 60)
 
 
+class PromotionRefused(RuntimeError):
+    """The champion is not the one the caller evaluated against, or the version is already live."""
+
+
 class ServiceState:
     def __init__(
         self, registry: Registry, threads: int, detector_specs: tuple[str, ...], auto_retrain: bool
@@ -75,7 +84,13 @@ class ServiceState:
         self.deployment = registry.deployment()
         self.active = ActiveModel()
         self.auto_retrain = auto_retrain
+        # Every change of the live model (gate promotion, forced, manual, rollback, reload) runs under
+        # this lock, so a gate decision is applied against the champion it was computed with.
+        # Forecasts never take it: they read the active model's reference.
+        self.swap_lock = threading.RLock()
+        self.decisions: list[dict[str, Any]] = []
         step_ns = int(parse_duration(self.deployment.freq).total_seconds() * 1e9)
+        self.per_day = round(86400.0 / parse_duration(self.deployment.freq).total_seconds())
         fixed = self.deployment.fixed_scaler
         self.monitor = ResidualMonitor(
             horizon=self.deployment.horizon,
@@ -116,19 +131,114 @@ class ServiceState:
             LOGGER.error("refusing to serve %s: %s", version, exc)
 
     def activate(self, version: str, reason: str) -> dict[str, Any]:
-        model = ServingModel(self.registry, version, threads=self.threads)  # verifies, raises on mismatch
-        self.registry.activate(version)
-        event = self.active.swap(model, reason=reason)
-        self.monitor.set_baseline(model.manifest.get("metrics", {}).get("val_mae_fixed"), version=version)
-        self.m_swaps.inc()
-        self.m_active.clear()
-        self.m_active.labels(version=version).set(1)
-        return {
-            "from": event.from_version,
-            "to": event.to_version,
-            "reason": reason,
-            "parity_max_abs_diff": model.verification["max_abs_diff"],
+        """Verify `version` (hashes, reference I/O, parity) and swap it in. No performance check:
+        this is the integrity step of a promotion, and the override path of operators (manual,
+        rollback, reload, startup)."""
+        with self.swap_lock:
+            model = ServingModel(self.registry, version, threads=self.threads)  # verifies, raises on mismatch
+            self.registry.activate(version)
+            event = self.active.swap(model, reason=reason)
+            self.monitor.set_baseline(model.manifest.get("metrics", {}).get("val_mae_fixed"), version=version)
+            self.m_swaps.inc()
+            self.m_active.clear()
+            self.m_active.labels(version=version).set(1)
+            return {
+                "from": event.from_version,
+                "to": event.to_version,
+                "reason": reason,
+                "parity_max_abs_diff": model.verification["max_abs_diff"],
+            }
+
+    def _record(self, version: str, record: dict[str, Any]) -> None:
+        """Keep the decision in memory and, when the registry is writable, next to the version. A
+        read-only registry mount (the serving container) must not turn a decision into an error."""
+        self.decisions.append(record)
+        try:
+            self.registry.record_gate(version, record)
+        except OSError as exc:
+            LOGGER.warning("cannot write the gate record for %s to %s: %s", version, self.registry.root, exc)
+
+    def record_override(
+        self, version: str, kind: str, via: str, activation: dict[str, Any]
+    ) -> dict[str, Any]:
+        """An activation that did not go through the gate (manual, rollback): kept in the same log."""
+        record = {
+            "candidate": version,
+            "champion": activation.get("from"),
+            "decision": kind,
+            "reason": via,
+            "decided_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "via": via,
+            "forced": True,
+            "applied": True,
+            "activation": activation,
         }
+        self._record(version, record)
+        return record
+
+    def promote(
+        self, version: str, *, via: str, force: bool = False, expected_champion: str | None = None
+    ) -> dict[str, Any]:
+        """Promote a registered candidate: integrity, then the performance gate, then the swap.
+
+        Returns the gate record with `applied` (did it go live) and `activation`. Raises
+        VerificationError when integrity fails (nothing changes), PromotionRefused when the
+        caller named a champion that is no longer live or asked for the live version.
+        """
+        with self.swap_lock:
+            champion = self.active.model.version if self.active.model else None
+            if expected_champion is not None and expected_champion != champion:
+                raise PromotionRefused(
+                    f"champion changed: {expected_champion} is no longer live, {champion} is"
+                )
+            if champion == version:
+                raise PromotionRefused(f"{version} is already active")
+            try:
+                self.registry.verify(
+                    version, threads=self.threads
+                )  # integrity first; a bad export stops here
+            except VerificationError as exc:
+                refused = {
+                    "candidate": version,
+                    "champion": champion,
+                    "decision": "refused",
+                    "reason": f"integrity: {exc}",
+                    "decided_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "via": via,
+                    "forced": False,
+                    "applied": False,
+                    "activation": None,
+                }
+                self._record(version, refused)
+                raise
+            manifest = self.registry.manifest(version)
+            cutoff = manifest.get("provenance", {}).get("cutoff_row")
+            ts, values = load_stream(self.registry.root / "stream.npz")
+            record = gate.evaluate(
+                self.registry,
+                values,
+                ts,
+                candidate=version,
+                champion=champion,
+                cutoff_row=int(cutoff) if cutoff is not None else len(values),
+                per_day=self.per_day,
+                threads=self.threads,
+            ).to_dict()
+            passed = record["decision"] in ("promote", "initial")
+            forced = bool(force and not passed)
+            out: dict[str, Any] = {
+                **record,
+                "via": via,
+                "forced": forced,
+                "applied": False,
+                "activation": None,
+            }
+            if passed or forced:
+                reason = "forced" if forced else ("gate" if record["decision"] == "promote" else "initial")
+                out["activation"] = self.activate(version, reason=reason)
+                out["applied"] = True
+            self._record(version, out)
+            return out
 
     def request_retrain(self, reason: dict[str, Any]) -> dict[str, Any]:
         cutoff = self.replay.cursor if self.replay is not None else None
@@ -210,12 +320,16 @@ def create_app(
 
     @app.post("/v1/models/{version}/activate", dependencies=[Depends(require_key)])
     def activate(version: str, reason: str = "manual") -> dict[str, Any]:
+        """Operator override: integrity check and swap, no performance gate. Recorded as `manual`;
+        automatic paths (worker, Airflow) use POST /v1/candidates/promote instead."""
         try:
-            return state.activate(version, reason=reason)
+            activation = state.activate(version, reason="manual")
         except VerificationError as exc:
             raise HTTPException(status_code=422, detail=f"refused: {exc}") from exc
         except RegistryError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        state.record_override(version, "manual", reason, activation)
+        return activation
 
     @app.post("/v1/models/reload", dependencies=[Depends(require_key)])
     def reload() -> dict[str, Any]:
@@ -300,6 +414,7 @@ def create_app(
                 for e in state.active.events
             ],
             "retrain_requests": state.retrain_requests[-50:],
+            "decisions": state.decisions[-50:],
         }
 
     @app.get("/metrics")

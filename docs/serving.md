@@ -7,14 +7,14 @@
 | `POST /v1/forecast` | `history` (L × C 실수 행렬) → `forecast` (H × C). `origin` 을 주면 지평 타임스탬프를 돌려주고 감시기에 기록 |
 | `POST /v1/observe` | 실제값 한 행 도착. 지평이 모두 채워진 예측을 "해결"하고 일별 통계·검출기를 갱신 |
 | `GET /v1/monitor` | 기준선(배포 시 검증 MAE), 최근 7일 MAE, 검출기 상태, 경보, 대기 중 재학습 job |
-| `GET /v1/models` · `POST /v1/models/{v}/activate` · `POST /v1/models/reload` | 레지스트리 버전 목록, 검증 후 교체(API 키), 디스크 `ACTIVE` 와 동기화 |
+| `GET /v1/models` · `POST /v1/models/{v}/activate` · `POST /v1/models/reload` | 레지스트리 버전 목록, 관리자 수동 교체(API 키, 무결성 검증만 하고 성능 게이트는 거치지 않으며 `manual` 로 기록), 디스크 `ACTIVE` 와 동기화 |
 | `GET /health` · `GET /ready` | 프로세스 생존 / 검증을 통과한 모델이 메모리에 있을 때만 200 |
 | `GET /metrics` | Prometheus: 요청 수(버전별), 지연 히스토그램, 교체 횟수, 최근 7일 MAE, 활성 버전 |
 | `POST /v1/replay/start` · `POST /v1/replay/step` · `GET /v1/replay` | 기록된 스트림을 시간순으로 재생(데모·통합 테스트) |
 | `GET /v1/data/profile` | 배포된 데이터의 출처(URL·SHA-256), 처리본 해시, 주기·채널·기간, 초기 학습/스트림 분할, 채널별 통계, 구간 평균 스파크라인, 준비 단계의 검사 보고서 |
 | `POST /v1/data/validate` | CSV 업로드(multipart, 5 MB 까지) → 같은 파이프라인의 검사(중복·역행·간격·NaN·상수 채널·못 읽은 시각)와 채널 통계, 앞 5행. 파일은 저장하지 않음. polars 가 없는 서빙 이미지에서는 501 |
 | `GET /v1/leaderboard` | 오프라인 LTSF 실행에서 모델 계열별 시험 MSE·MAE·파라미터·학습 시간(시드 평균, `static/evidence.json`) + 레지스트리의 실제 버전 목록 |
-| `GET /v1/candidates` · `POST /v1/candidates` · `POST /v1/candidates/promote` | 재학습 작업 목록(상태·계열·버전·검증 MAE·게이트 판단). 계열(linear·nlinear·dlinear·patchtst)과 최대 에포크를 골라 후보 학습 작업을 등록(활성화 안 함, 한 번에 하나). 승격은 후보 검증 MAE 가 현재 모델의 최근 7일 MAE(없으면 배포 시 검증 MAE)보다 낮을 때만, `force` 로 수동 활성화 |
+| `GET /v1/candidates` · `POST /v1/candidates` · `POST /v1/candidates/promote` | 재학습 작업 목록(상태·계열·버전·검증 MAE·게이트 판단). 계열(linear·nlinear·dlinear·patchtst)과 최대 에포크를 골라 후보 학습 작업을 등록(활성화 안 함, 한 번에 하나). 승격은 두 단계: 무결성(해시·참조 입출력·parity) 통과 뒤, 후보와 현재 모델을 후보의 학습 마감 전 14일 중 정답이 모두 도착한 날들의 같은 origin(시간 단위 H=96 이면 10일 240개)에서 고정 척도로 비교해 후보가 더 낮을 때만. 동률·표본 부족·비유한값이면 보류. 응답과 `versions/<v>/gate.json` 에 결정 시각·평가 구간·표본 수·두 버전·두 MAE·사유가 남고, `force` 는 강제로 기록됨. `champion` 을 주면 그 버전이 더 이상 현재가 아닐 때 거부 |
 | `GET /v1/models/{v}` · `GET /v1/models/{v}/card` · `POST /v1/models/rollback` | 버전 매니페스트, 마크다운 모델 카드(학습 구간·지표·해시·입출력 계약·호출 예), 직전 버전으로 되돌리기(교체 이력 기준, 검증 후 교체) |
 | `GET /v1/replay/window` · `GET /v1/workbench` | 현재 스트림 시점의 lookback 입력과 그 뒤 horizon 의 실제값(예측 대 실제 차트용), 대시보드 머리말 요약 |
 
@@ -27,8 +27,11 @@
 감시기 경보 또는 주기 도래
   → API 가 registry/jobs/<id>.json 작성 (requested)            ← API 는 학습하지 않는다
   → worker 가 집어감 (training): 스트림[:cutoff] 로 콜드 학습, ONNX 내보내기, parity 검사, 참조 쌍 저장, 등록
-  → worker 가 POST /v1/models/<v>/activate
-  → API 가 해시 재계산 + 참조 입력 재생(편차 ≤ 1e-4) → 통과 시 포인터 교체, 실패 시 422 + 기존 모델 유지
+  → worker 가 POST /v1/candidates/promote
+  → API 가 (1) 해시 재계산 + 참조 입력 재생(편차 ≤ 1e-4), 실패 시 422 + 기존 모델 유지
+          (2) 후보와 현재 모델을 후보의 학습 마감 전 14일 중 정답이 모두 도착한 날들의 같은 origin 에서
+              고정 척도로 비교(serving/gate.py), 후보가 더 낮을 때만 포인터 교체 — 동률·표본 부족이면 409 + 유지
+          결정은 versions/<v>/gate.json 과 GET /v1/events 의 decisions 에 남는다
   → 감시기 기준선을 새 모델의 검증 MAE 로 재설정, 이전 버전이 만든 예측이 해결되는 날은 판정에서 제외
 ```
 
@@ -100,7 +103,7 @@ p95 <!-- num:artifacts/serving/http_latency.json#http_ms/p95:.2f -->5.87<!-- /nu
 | 파일 | 내용 |
 |---|---|
 | `Dockerfile` | ONNX Runtime 전용 서빙 이미지(비 root, uid 10001). 재학습 루프가 없는 정적 서빙이면 레지스트리를 읽기 전용으로 마운트해도 되고, 그때 API 는 기동 시 ACTIVE 를 검증만 하고 다시 쓰지 않으며 재학습 요청을 쓸 수 없으면 오류를 기록하고 계속 서빙합니다 |
-| `Dockerfile.worker` | PyTorch CPU + 학습·내보내기(비 root, 같은 uid 10001). 같은 볼륨에 버전을 쓰고 API 에 activate 요청 |
+| `Dockerfile.worker` | PyTorch CPU + 학습·내보내기(비 root, 같은 uid 10001). 같은 볼륨에 버전을 쓰고 API 에 승격(게이트) 요청 |
 | `docker-compose.yml` | `init`(ETTh1 내려받기 + v0001) → `api` + `worker`. 두 컨테이너가 쓰는 볼륨이라 API 에도 쓰기 권한을 줍니다: API 는 새 버전을 검증한 뒤 ACTIVE 포인터를, 재학습 요청 시 jobs/ 를 씁니다 |
 | `Dockerfile.demo` + `render.yaml` | 단일 컨테이너 공개 데모(빌드 시 v0001 학습, `metronome demo` 로 API+worker 스레드) |
 

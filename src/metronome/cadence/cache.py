@@ -4,6 +4,11 @@ A cold refit on day d depends only on (data up to d, seed), never on which polic
 So every policy can be simulated afterwards by picking, for each day, which cached model was
 active. The cache stores per-(model day, evaluation day, channel) error sums on the fixed
 evaluation scale (docs/protocol.md P4, P6), not forecasts, so it stays small.
+
+Besides the days after it, every model is also evaluated on the `val_days` stream days before it
+(its own validation span, held out from weight fitting but used for early stopping). The promotion
+gate compares a candidate with the incumbent on the resolved part of exactly those days, so both
+read the same array on the same days (see cadence/simulate.py).
 """
 
 from __future__ import annotations
@@ -121,6 +126,11 @@ def train_day(data: StreamData, day: int, cfg: CacheConfig) -> tuple[torch.nn.Mo
     return model, scaler, info
 
 
+def evaluation_start_day(day: int, cfg: CacheConfig) -> int:
+    """First stream day a model trained on `day` is evaluated on: its validation span, if in the stream."""
+    return max(0, day - cfg.val_days)
+
+
 def evaluate_from_day(
     data: StreamData, model: torch.nn.Module, scaler: Scaler, day: int, cfg: CacheConfig
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -158,8 +168,9 @@ def _run_day(day: int) -> dict[str, Any]:
     data: StreamData = _WORKER["data"]
     started = time.perf_counter()
     model, scaler, info = train_day(data, day, cfg)
-    abs_sum, sq_sum, count = evaluate_from_day(data, model, scaler, day, cfg)
+    abs_sum, sq_sum, count = evaluate_from_day(data, model, scaler, evaluation_start_day(day, cfg), cfg)
     info["wall_seconds"] = time.perf_counter() - started
+    info["evaluated_from_day"] = evaluation_start_day(day, cfg)
     info["abs_sum"] = abs_sum
     info["sq_sum"] = sq_sum
     info["count"] = count
@@ -201,8 +212,9 @@ def build_cache(
             d = info["day"]
             abs_sum[d] = info.pop("abs_sum")
             sq_sum[d] = info.pop("sq_sum")
-            abs_sum[d, :d] = np.nan  # a model is never evaluated on days before it exists
-            sq_sum[d, :d] = np.nan
+            first = evaluation_start_day(d, cfg)  # its validation span before it, nothing earlier
+            abs_sum[d, :first] = np.nan
+            sq_sum[d, :first] = np.nan
             count = np.maximum(count, info.pop("count"))
             if "state_dict" in info:
                 day0 = {"state_dict": info.pop("state_dict"), "scaler": info.pop("scaler")}
@@ -226,6 +238,7 @@ def build_cache(
         "config": cfg.to_dict(),
         "n_days": n_days,
         "n_channels": n_channels,
+        "backward_days": cfg.val_days,  # each model is also evaluated on this many days before it
         "stream_start": data.split.stream_start,
         "fixed_scaler": data.fixed.to_dict(),
         "day0_scaler": day0.get("scaler"),

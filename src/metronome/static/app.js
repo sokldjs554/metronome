@@ -221,13 +221,26 @@
       svg.appendChild(el('text', { x: x(r.mse) + 6, y: y0 + bh / 2 + 4, class: 'tick', 'font-size': 11 }, r.mse.toFixed(3)));
     });
   }
+  function gateText(g) {
+    // One line that says what was compared with what, on which sample, and why it ended as it did.
+    if (!g) return '—';
+    const when = g.origin_times && g.origin_times.length === 2 ? `${g.origin_times[0].slice(0, 16)} ~ ${g.origin_times[1].slice(0, 16)}` : '';
+    const sample = g.n_origins ? `같은 origin ${g.n_origins}개(완결 ${g.n_days}일, ${when})` : '표본 없음';
+    const reason = { better: '후보가 더 낫다', worse: '후보가 더 나쁘다', tie: '동률', insufficient_sample: '표본 부족(학습 마감 전 14일이 다 안 됨)', nonfinite: '비유한값', no_champion: '현재 모델 없음', manual: '관리자 수동 활성화', rollback: '롤백' }[g.reason] || g.reason;
+    const head = { promote: '승격', reject: '거부', hold: '보류', initial: '초기 배포', manual: '수동 활성화', rollback: '롤백' }[g.decision] || g.decision;
+    const maes = g.candidate_mae !== null && g.candidate_mae !== undefined ? ` — 후보 ${g.candidate} ${fmt(g.candidate_mae, 4)} vs 현재 ${g.champion} ${fmt(g.champion_mae, 4)} (고정 척도), ${sample}` : '';
+    const forced = g.forced ? ' · 게이트와 무관하게 강제 적용' : '';
+    return `${head}: ${reason}${maes}${forced} · ${(g.decided_at || '').replace('T', ' ').replace('Z', ' UTC')}`;
+  }
   function renderCandidates(c) {
     const ch = c.champion || {};
+    const rule = c.gate_rule || {};
     kv($('champion-kv'), [
       ['현재 모델', ch.version || '—'],
       ['배포 시 검증 MAE', fmt(ch.val_mae_fixed, 4)],
-      ['최근 7일 MAE (리플레이)', fmt(ch.rolling_7d_mae, 4)],
-      ['게이트 기준', ch.rolling_7d_mae ? '최근 7일 MAE' : '배포 시 검증 MAE'],
+      ['최근 7일 MAE (리플레이, 참고)', fmt(ch.rolling_7d_mae, 4)],
+      ['현재 모델이 오른 근거', gateText(ch.gate)],
+      ['게이트 규칙', rule.text ? `${rule.text} (${rule.window_days}일 창, H=${rule.horizon})` : '—'],
     ]);
     const tb = $('candidates-table').querySelector('tbody');
     tb.innerHTML = '';
@@ -236,8 +249,10 @@
     jobs.forEach((j) => {
       const tr = document.createElement('tr');
       const st = { requested: '대기', training: '학습 중…', done: '등록됨', failed: '실패' }[j.status] || j.status;
-      const gate = j.status !== 'done' ? '—' : j.active ? '<span class="badge ok">서비스 중</span>' : j.better_than_active === null ? '—' : j.better_than_active ? '<span class="state-ok">더 좋음</span>' : '<span class="state-alarm">더 나쁨</span>';
-      const act = j.status === 'done' && !j.active ? `<button class="small" data-promote="${esc(j.version)}">게이트 승격</button> <button class="small secondary" data-force="${esc(j.version)}">강제</button>` : '';
+      const g = j.gate;
+      const gcls = !g ? '' : g.decision === 'promote' ? 'state-ok' : g.decision === 'reject' ? 'state-alarm' : '';
+      const gate = j.status !== 'done' ? '—' : j.active ? `<span class="badge ok">서비스 중</span> <span class="muted" title="${esc(gateText(g))}">${g ? esc({ promote: '게이트 통과', initial: '초기 배포', manual: '수동', rollback: '롤백' }[g.decision] || g.decision) + (g.forced ? ' (강제)' : '') : ''}</span>` : !g ? '<span class="muted">미평가</span>' : `<span class="${gcls}" title="${esc(gateText(g))}">${esc({ promote: '통과', reject: '거부', hold: '보류' }[g.decision] || g.decision)}: ${esc(g.reason)}</span>`;
+      const act = j.status === 'done' && !j.active ? `<button class="small" data-promote="${esc(j.version)}">게이트 평가·승격</button> <button class="small secondary" data-force="${esc(j.version)}">강제</button>` : '';
       const trig = { candidate: '후보', detector: '검출기', schedule: '주기', initial: '초기' }[j.trigger] || j.trigger || '';
       tr.innerHTML = `<td title="${esc(j.job)}">${esc(trig)}</td><td>${esc(j.model || '—')}</td><td class="${j.status === 'failed' ? 'state-alarm' : ''}" title="${esc(j.error || '')}">${esc(st)}</td><td>${esc(j.version || '—')}</td><td class="num">${fmt(j.metrics && j.metrics.val_mae_fixed, 4)}</td><td class="num">${j.metrics && j.metrics.train_seconds !== null ? fmt(j.metrics.train_seconds, 1) : '—'}</td><td>${gate}</td><td>${act}</td>`;
       tb.appendChild(tr);
@@ -249,11 +264,12 @@
   }
   async function promote(version, force) {
     try {
-      const r = await withKey(() => postJSON('/v1/candidates/promote', { version, force }));
-      $('cand-status').textContent = `${r.candidate} 승격: 후보 ${fmt(r.candidate_val_mae, 4)} < 현재 ${fmt(r.champion_mae, 4)} (${r.champion_mae_source})`;
+      const champion = (document.querySelector('#champion-kv dd') || {}).textContent || null;
+      const r = await withKey(() => postJSON('/v1/candidates/promote', { version, force, reason: 'dashboard', champion: champion && champion !== '—' ? champion : null }));
+      $('cand-status').textContent = `${r.candidate} ${gateText(r)}`;
     } catch (err) {
       const d = err.data || {};
-      $('cand-status').textContent = d.promote === false ? `게이트 거부: 후보 ${fmt(d.candidate_val_mae, 4)} ≥ 현재 ${fmt(d.champion_mae, 4)} (${d.champion_mae_source}). 강제로 올릴 수는 있습니다.` : `오류: ${err.message}`;
+      $('cand-status').textContent = d.decision ? `${d.candidate} ${gateText(d)}. 현재 모델을 유지합니다(강제로 올릴 수는 있고, 그 경우 강제로 기록됩니다).` : `오류: ${err.message}`;
     }
     refresh();
   }

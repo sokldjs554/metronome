@@ -57,7 +57,7 @@ jobs:
 
   pipeline-smoke:
     # Real data, short budget: pinned ETTh1 -> validated Parquet -> 3-day refit cache -> policies ->
-    # registry v0001 -> API -> replay -> retrain job -> worker -> verified v0002 hot swap.
+    # registry v0001 -> API -> replay -> retrain job -> worker -> v0002 verified and gated by the API.
     needs: lint
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -70,7 +70,7 @@ jobs:
       - run: metronome cache etth1 --seed 0 --workers 2 --max-epochs 2 --limit-days 3
       - run: metronome simulate etth1_dlinear_s0 --out-dir artifacts/cadence-smoke
       - run: metronome deploy-init etth1 --registry registry/etth1 --threads 2 --max-epochs 2
-      - name: serve, replay until a scheduled retrain, let the worker swap the model
+      - name: serve, replay until a scheduled retrain, let the worker deliver v0002 through the gate
         run: |
           metronome serve --registry registry/etth1 --port 8000 > serve.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ready && break; sleep 1; done
@@ -78,9 +78,9 @@ jobs:
           curl -sf -X POST http://127.0.0.1:8000/v1/replay/start -H 'content-type: application/json' -d '{"schedule_days": 2}'
           curl -sf -X POST http://127.0.0.1:8000/v1/replay/step -H 'content-type: application/json' -d '{"steps": 96}' | python -c "import sys,json; d=json.load(sys.stdin); assert d['retrain_requests'], d; print(d['position'])"
           metronome worker --registry registry/etth1 --api-url http://127.0.0.1:8000 --max-epochs 2 --once
-          curl -sf http://127.0.0.1:8000/ready | tee ready.json
-          python -c "import json; assert json.load(open('ready.json'))['model'] == 'v0002'"
-          curl -sf http://127.0.0.1:8000/v1/events | python -c "import sys,json; e=json.load(sys.stdin); assert e['swaps'][-1]['to']=='v0002', e"
+          # the worker asks the API to promote v0002: integrity, then the gate on the same resolved
+          # windows; either outcome is valid, the service must serve what the decision says
+          curl -sf http://127.0.0.1:8000/v1/events | python3 -c "import sys,json,urllib.request; e=json.load(sys.stdin); d=[x for x in e['decisions'] if x['candidate']=='v0002']; assert d, e; d=d[-1]; assert d['decision'] in ('promote','reject','hold') and d['n_origins']>0 and d['via']=='worker', d; r=json.load(urllib.request.urlopen('http://127.0.0.1:8000/ready')); assert r['model']==('v0002' if d['applied'] else 'v0001'), (r, d); print('gate', d['decision'], d['reason'], 'candidate', d['candidate_mae'], 'champion', d['champion_mae'], 'on', d['n_origins'], 'origins; serving', r['model'])"
       - uses: actions/upload-artifact@v4
         with:
           name: registry-smoke
@@ -127,7 +127,8 @@ jobs:
   compose:
     # The two-container deployment from the README, end to end: init trains v0001 into a named volume, the
     # ONNX-only API serves it, a replayed schedule makes the API write a retrain job, the PyTorch worker
-    # container trains/exports/registers v0002 and the API verifies and swaps to it. Needs a writable
+    # container trains/exports/registers v0002 and asks the API to promote it (integrity, then the
+    # performance gate; the API serves what the decision says). Needs a writable
     # registry for the API (ACTIVE pointer, jobs/) and one shared uid across both images.
     needs: lint
     runs-on: ubuntu-24.04
@@ -144,17 +145,18 @@ jobs:
           curl -sf http://127.0.0.1:8000/ready > ready1.json || { echo "::error::api never became ready"; docker compose logs --no-color; exit 1; }
           cat ready1.json
           python3 -c "import json; assert json.load(open('ready1.json'))['model'] == 'v0001'"
-      - name: replay asks for a retrain, the worker container delivers v0002, the API swaps
+      - name: replay asks for a retrain, the worker container delivers v0002, the API decides
         run: |
           curl -sf -X POST http://127.0.0.1:8000/v1/replay/start -H 'content-type: application/json' -d '{"schedule_days": 2}'
           curl -sf -X POST http://127.0.0.1:8000/v1/replay/step -H 'content-type: application/json' -d '{"steps": 96}' | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['retrain_requests'] and 'error' not in d['retrain_requests'][0], d; print(d['position'])"
           for i in $(seq 1 120); do
-            m=$(curl -sf http://127.0.0.1:8000/ready | python3 -c "import sys,json; print(json.load(sys.stdin)['model'])" || true)
-            [ "$m" = "v0002" ] && break
+            n=$(curl -sf http://127.0.0.1:8000/v1/events | python3 -c "import sys,json; print(len([x for x in json.load(sys.stdin)['decisions'] if x['candidate']=='v0002']))" || echo 0)
+            [ "$n" != "0" ] && break
             sleep 3
           done
-          curl -sf http://127.0.0.1:8000/ready | python3 -c "import sys,json; assert json.load(sys.stdin)['model'] == 'v0002'"
-          curl -sf http://127.0.0.1:8000/v1/events | python3 -c "import sys,json; e=json.load(sys.stdin); assert e['swaps'][-1]['to'] == 'v0002', e"
+          # the worker asked the API to promote v0002 (integrity, then the gate on the same resolved
+          # windows); either outcome is valid, the service must serve what the decision says
+          curl -sf http://127.0.0.1:8000/v1/events | python3 -c "import sys,json,urllib.request; e=json.load(sys.stdin); d=[x for x in e['decisions'] if x['candidate']=='v0002']; assert d, e; d=d[-1]; assert d['decision'] in ('promote','reject','hold') and d['n_origins']>0 and d['via']=='worker', d; r=json.load(urllib.request.urlopen('http://127.0.0.1:8000/ready')); assert r['model']==('v0002' if d['applied'] else 'v0001'), (r, d); print('gate', d['decision'], d['reason'], 'candidate', d['candidate_mae'], 'champion', d['champion_mae'], 'on', d['n_origins'], 'origins; serving', r['model'])"
       - name: container logs
         if: failure()
         run: docker compose logs --no-color
@@ -165,7 +167,7 @@ jobs:
   k8s:
     # The same two-process deployment on Kubernetes (deploy/k8s): a kind cluster in the job, the two
     # images built here and loaded into it, the init Job trains v0001 into the PVC, then the replay asks
-    # for a retrain and the worker pod delivers v0002 which the API pod verifies and swaps to.
+    # for a retrain and the worker pod delivers v0002, which the API pod verifies and gates.
     needs: lint
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -193,17 +195,18 @@ jobs:
           curl -sf http://127.0.0.1:8000/ready > ready1.json
           cat ready1.json
           python3 -c "import json; assert json.load(open('ready1.json'))['model'] == 'v0001'"
-      - name: replay asks for a retrain, the worker pod delivers v0002, the API pod swaps
+      - name: replay asks for a retrain, the worker pod delivers v0002, the API pod decides
         run: |
           curl -sf -X POST http://127.0.0.1:8000/v1/replay/start -H 'content-type: application/json' -d '{"schedule_days": 2}'
           curl -sf -X POST http://127.0.0.1:8000/v1/replay/step -H 'content-type: application/json' -d '{"steps": 96}' | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['retrain_requests'] and 'error' not in d['retrain_requests'][0], d; print(d['position'])"
           for i in $(seq 1 120); do
-            m=$(curl -sf http://127.0.0.1:8000/ready | python3 -c "import sys,json; print(json.load(sys.stdin)['model'])" || true)
-            [ "$m" = "v0002" ] && break
+            n=$(curl -sf http://127.0.0.1:8000/v1/events | python3 -c "import sys,json; print(len([x for x in json.load(sys.stdin)['decisions'] if x['candidate']=='v0002']))" || echo 0)
+            [ "$n" != "0" ] && break
             sleep 3
           done
-          curl -sf http://127.0.0.1:8000/ready | python3 -c "import sys,json; assert json.load(sys.stdin)['model'] == 'v0002'"
-          curl -sf http://127.0.0.1:8000/v1/events | python3 -c "import sys,json; e=json.load(sys.stdin); assert e['swaps'][-1]['to'] == 'v0002', e"
+          # the worker asked the API to promote v0002 (integrity, then the gate on the same resolved
+          # windows); either outcome is valid, the service must serve what the decision says
+          curl -sf http://127.0.0.1:8000/v1/events | python3 -c "import sys,json,urllib.request; e=json.load(sys.stdin); d=[x for x in e['decisions'] if x['candidate']=='v0002']; assert d, e; d=d[-1]; assert d['decision'] in ('promote','reject','hold') and d['n_origins']>0 and d['via']=='worker', d; r=json.load(urllib.request.urlopen('http://127.0.0.1:8000/ready')); assert r['model']==('v0002' if d['applied'] else 'v0001'), (r, d); print('gate', d['decision'], d['reason'], 'candidate', d['candidate_mae'], 'champion', d['champion_mae'], 'on', d['n_origins'], 'origins; serving', r['model'])"
       - name: cluster state and pod logs
         if: failure()
         run: |
@@ -266,10 +269,12 @@ jobs:
           import json, os, urllib.request
           d = json.load(open(os.environ["METRONOME_GATE_LOG"]))
           ready = json.load(urllib.request.urlopen("http://127.0.0.1:8000/ready"))
-          expected = d["candidate"] if d["promote"] else d["champion"]
+          expected = d["candidate"] if d["applied"] else d["champion"]
           assert ready["model"] == expected, (ready, d)
+          assert d["decision"] in ("promote", "reject", "hold") and d["n_days"] >= 0, d
+          mae = lambda v: "n/a" if v is None else f"{v:.4f}"
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-              f.write(f"### airflow gate: promote={d['promote']}\n\n`{d['champion']}` {d['champion_mae']:.4f} ({d['champion_mae_source']}) vs candidate `{d['candidate']}` {d['candidate_val_mae']:.4f}; serving `{ready['model']}`\n")
+              f.write(f"### airflow gate: {d['decision']} ({d['reason']})\n\n`{d['champion']}` {mae(d['champion_mae'])} vs candidate `{d['candidate']}` {mae(d['candidate_mae'])} on the same {d['n_origins']} origins ({d['n_days']} resolved days before {d['cutoff_time']}); serving `{ready['model']}`\n")
           PY
       - name: logs
         if: failure()
