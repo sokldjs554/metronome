@@ -134,10 +134,10 @@ weather 와 electricity20 은 매일 재학습의 이득이 확인되지 않아 
 
 **비율 규칙은 시드를 늘리면 더 해롭습니다.** ETTh1 에서 ratio-0.2 는 never 대비 <!-- num:artifacts/cadence_summary_extended.json#datasets/etth1/expanding/policies/ratio-0.2/improvement_vs_never_pct:+.2f -->-8.83<!-- /num -->%
 (헤드라인 시드 3개에서는 -2.6%)입니다. 헤드라인에서 확인한 메커니즘(이상 구간 한가운데서 울려 그 구간에 맞춘 모델이 새 기준선이 됨)이 시드마다 얼마나 자주 일어나는지는
-시드별 경보 시점을 확인하지 않아 말할 수 없습니다. 확인한 것은 손해가 시드를 늘리자 커졌다는 사실입니다. 승격 게이트를 붙이면
-<!-- num:artifacts/cadence_summary_extended.json#datasets/etth1/expanding/policies/ratio-0.2+gate/improvement_vs_never_pct:+.2f -->-0.16<!-- /num -->% 로 손해가 거의 사라집니다. 반대로 ETTh2 에서는 게이트가
-ph-0.1 의 MAE 를 <!-- num:artifacts/cadence_summary_extended.json#datasets/etth2/expanding/policies/ph-0.1/mae_mean:.4f -->0.3168<!-- /num --> 에서 <!-- num:artifacts/cadence_summary_extended.json#datasets/etth2/expanding/policies/ph-0.1+gate/mae_mean:.4f -->0.3184<!-- /num --> 로 조금 나쁘게 해, 헤드라인의 "게이트는 공짜가
-아니다"가 시드 8개에서도 유지됩니다.
+시드별 경보 시점을 확인하지 않아 말할 수 없습니다. 확인한 것은 손해가 시드를 늘리자 커졌다는 사실입니다.
+게이트 변형(`+gate`)의 시드 8개 수치는 2026-10-09 정정(변경 이력 참고) 뒤 시드 3~7 캐시를 다시 만드는 중이라 여기에는 적지 않습니다.
+정정 전 값은 ETTh1 ratio-0.2+gate −0.16%, ETTh2 ph-0.1+gate 0.3184 였고, 재생성이 끝나면 같은 자리에 정정 후 값을 적습니다.
+시드 3개의 정정 후 게이트 수치는 아래 "사후 탐색" 표에 있습니다.
 
 ## 사후 탐색: 승격 게이트 (+gate)
 
