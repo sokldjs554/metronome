@@ -72,7 +72,19 @@ jobs:
           service_trust() {
             printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"%s"},"Action":"sts:AssumeRole"}]}' "$1"
           }
-          aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com >/dev/null 2>&1 || true
+          # Express Mode's provisioning hook creates the load balancer and the scaling target with these
+          # service-linked roles. Creating them here, visibly, means a policy that forbids it shows up in
+          # this log instead of as an opaque "infrastructure role doesn't have enough permission" rollback.
+          for svc in ecs.amazonaws.com elasticloadbalancing.amazonaws.com ecs.application-autoscaling.amazonaws.com; do
+            if out=$(aws iam create-service-linked-role --aws-service-name "$svc" 2>&1); then
+              echo "service-linked role for $svc created"
+            else
+              case "$out" in
+                *"has been taken"*|*"already exists"*) echo "service-linked role for $svc exists" ;;
+                *) echo "$out" | sed 's/[0-9]\{12\}/***/g'; echo "::warning::could not create the service-linked role for $svc" ;;
+              esac
+            fi
+          done
 
           ensure_role "$EXEC_ROLE" "$(service_trust ecs-tasks.amazonaws.com)"
           aws iam attach-role-policy --role-name "$EXEC_ROLE" \

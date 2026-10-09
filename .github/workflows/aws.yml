@@ -162,6 +162,11 @@ jobs:
               awsLogsConfiguration: {logGroup: $lg, logStreamPrefix: "ecs"},
               environment: [{name: "PORT", value: "8000"}]}')
 
+          # Remembered so the next step can tell a fresh deployment from the previous one's leftovers.
+          prev=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+            --query "services[0].deployments[?status=='PRIMARY'] | [0].id" --output text 2>/dev/null || true)
+          [ "$prev" = "None" ] && prev=""
+          echo "PREV_DEPLOYMENT=$prev" >> "$GITHUB_ENV"
           if [ -z "$arn" ]; then
             arn=$(aws ecs create-express-gateway-service \
               --cluster "$CLUSTER" --service-name "$SERVICE" \
@@ -185,8 +190,14 @@ jobs:
         run: |
           # ECS replaces the task only after the new one passes the load balancer's /ready check.
           for i in $(seq 1 60); do
-            read -r rollout td <<<"$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
-              --query "services[0].deployments[?status=='PRIMARY'] | [0].[rolloutState, taskDefinition]" --output text)"
+            read -r id rollout td <<<"$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+              --query "services[0].deployments[?status=='PRIMARY'] | [0].[id, rolloutState, taskDefinition]" --output text)"
+            if [ -n "$PREV_DEPLOYMENT" ] && [ "$id" = "$PREV_DEPLOYMENT" ] && [ "$rollout" != "COMPLETED" ]; then
+              # The previous deployment is still the primary one: the update has not started its own yet.
+              echo "attempt $i: waiting for the new deployment to start (the previous one is $rollout)"
+              [ "$i" -lt 12 ] || { echo "::error::the update did not start a new deployment"; exit 1; }
+              sleep 15; continue
+            fi
             running=$(aws ecs describe-task-definition --task-definition "$td" \
               --query "taskDefinition.containerDefinitions[0].image" --output text)
             echo "attempt $i: rollout=$rollout image=${running##*/}"
@@ -198,6 +209,46 @@ jobs:
           aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
             --query "services[0].events[:10].message" --output text | sed 's/[0-9]\{12\}/***/g'
           exit 1
+      - name: why it failed
+        if: ${{ failure() && (inputs.action || 'deploy') != 'delete' }}
+        run: |
+          # Evidence for the next fix: what Express Mode provisioned, which service-linked roles exist,
+          # whether there is a default VPC, and every call AWS refused recently (CloudTrail event history;
+          # IAM calls are recorded in us-east-1, which a region policy may hide).
+          mask() { sed 's/[0-9]\{12\}/***/g'; }
+          echo "## service"
+          aws ecs describe-express-gateway-service --service-arn "$SERVICE_ARN" --output json 2>&1 | mask | head -c 6000; echo
+          echo "## service-linked roles"
+          for r in AWSServiceRoleForECS AWSServiceRoleForElasticLoadBalancing AWSServiceRoleForApplicationAutoScaling_ECSService; do
+            if aws iam get-role --role-name "$r" >/dev/null 2>&1; then echo "$r exists"; else echo "$r MISSING"; fi
+          done
+          echo "## default VPC: $(aws ec2 describe-vpcs --filters Name=is-default,Values=true --query 'Vpcs[].VpcId' --output text 2>&1 | mask)"
+          echo "## load balancers"
+          aws elbv2 describe-load-balancers --query "LoadBalancers[].[LoadBalancerName,State.Code]" --output text 2>&1 | mask
+          cat > "$RUNNER_TEMP/denied.py" <<'PY'
+          import json, sys
+          raw = sys.stdin.read()
+          try:
+              events = json.loads(raw)
+          except Exception:
+              print(raw[:800]); sys.exit(0)
+          n = 0
+          for e in events:
+              e = json.loads(e)
+              if "errorCode" not in e:
+                  continue
+              n += 1
+              ident = e.get("userIdentity", {})
+              who = ident.get("sessionContext", {}).get("sessionIssuer", {}).get("userName") or ident.get("userName") or ident.get("type")
+              print(e["eventTime"], e["eventSource"], e["eventName"], "by", who, "->", e["errorCode"], (e.get("errorMessage") or "")[:300])
+          print(n, "refused calls")
+          PY
+          since=$(date -u -d '-45 minutes' +%FT%TZ)
+          for region in "$AWS_REGION" us-east-1; do
+            echo "## refused calls since $since in $region"
+            aws --region "$region" cloudtrail lookup-events --start-time "$since" --max-items 500 \
+              --query "Events[].CloudTrailEvent" --output json 2>&1 | mask | python3 "$RUNNER_TEMP/denied.py"
+          done
       - name: public address answers
         id: url
         if: ${{ (inputs.action || 'deploy') != 'delete' }}
