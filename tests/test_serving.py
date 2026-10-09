@@ -401,30 +401,35 @@ def test_replay_window_feeds_the_forecast_chart(client: TestClient, deployment: 
 
 
 # ---- the promotion gate: integrity, then performance on the same resolved windows -------------
-def _register(
-    root: Path, *, epochs: int | None, seed: int = 0, cutoff_row: int | None = None, tag: str = ""
-) -> str:
-    """Register a candidate without activating it. epochs=None: an untrained (random) model, a valid
-    ONNX export with a reference pair that passes every integrity check but forecasts badly."""
+def _register(root: Path, *, kind: str, cutoff_row: int | None = None, tag: str = "") -> str:
+    """Register a candidate without activating it. kind "trained": the worker's recipe, 3 epochs;
+    "naive": every weight zero, so the forecast is the last value (a valid ONNX export with a
+    reference pair that passes every integrity check); "bad": the same plus a bias of three
+    standard deviations on every step, deterministically worse than "naive"."""
+    import torch
+
     from metronome.serving.worker import export_and_register, train_replacement
 
     reg = Registry(root)
     dep = reg.deployment()
     ts, values = load_stream(root / "stream.npz")
     cutoff = len(values)
-    if epochs is None:
+    if kind == "trained":
+        net, scaler, metrics = train_replacement(
+            values, cutoff, dep.lookback, dep.horizon, max_epochs=3, seed=0, fixed=dep.fixed_scaler
+        )
+    else:
         from metronome.data.windows import Scaler
         from metronome.models import build
-        from metronome.train.trainer import seed_everything
 
-        seed_everything(seed)
         net = build("dlinear", dep.lookback, dep.horizon, values.shape[1])
+        with torch.no_grad():
+            for name, param in net.named_parameters():
+                param.zero_()
+                if kind == "bad" and name.endswith("bias"):
+                    param.fill_(1.5)  # seasonal + trend biases add up to +3 sigma on every step
         scaler = Scaler.fit(values[:cutoff]).to_dict()
-        metrics: dict = {"val_mae_fixed": None, "epochs": 0, "train_seconds": 0.0}
-    else:
-        net, scaler, metrics = train_replacement(
-            values, cutoff, dep.lookback, dep.horizon, max_epochs=epochs, seed=seed, fixed=dep.fixed_scaler
-        )
+        metrics = {"val_mae_fixed": None, "epochs": 0, "train_seconds": 0.0}
     decision_cutoff = cutoff if cutoff_row is None else cutoff_row
     provenance = {
         "trigger": "test",
@@ -433,20 +438,20 @@ def _register(
         "model": "dlinear",
     }
     return export_and_register(
-        reg, net, scaler, metrics, provenance, values, cutoff, root / "work" / f"t{tag}{seed}"
+        reg, net, scaler, metrics, provenance, values, cutoff, root / "work" / f"t{tag}"
     )
 
 
 @pytest.fixture
 def gated(deployment: dict, tmp_path: Path) -> dict:
-    """A copy of the deployment whose champion is an untrained model, so a trained candidate is
-    strictly better and a second untrained one strictly worse: deterministic gate outcomes."""
+    """A copy of the deployment whose champion forecasts the last value (every weight zero), so a
+    trained candidate is strictly better and a biased one strictly worse: deterministic outcomes."""
     import shutil
 
     root = tmp_path / "registry"
     shutil.copytree(deployment["root"], root)
     reg = Registry(root)
-    weak = _register(root, epochs=None, seed=1, tag="weak")
+    weak = _register(root, kind="naive", tag="weak")
     reg.activate(weak)
     app = create_app(root, api_key="secret", threads=1)
     client = TestClient(app)
@@ -456,7 +461,7 @@ def gated(deployment: dict, tmp_path: Path) -> dict:
 
 def test_gate_rejects_a_valid_but_worse_candidate_and_keeps_serving(gated: dict) -> None:
     client, root, key = gated["client"], gated["root"], gated["key"]
-    worse = _register(root, epochs=None, seed=2, tag="worse")  # passes integrity, forecasts worse
+    worse = _register(root, kind="bad", tag="worse")  # passes integrity, forecasts worse
     assert Registry(root).verify(worse)["onnx_sha256"]
     r = client.post("/v1/candidates/promote", json={"version": worse, "reason": "worker"}, headers=key)
     body = r.json()
@@ -475,7 +480,7 @@ def test_gate_rejects_a_valid_but_worse_candidate_and_keeps_serving(gated: dict)
 
 def test_gate_promotes_a_better_candidate_only_after_integrity(gated: dict) -> None:
     client, root, key = gated["client"], gated["root"], gated["key"]
-    better = _register(root, epochs=3, tag="better")
+    better = _register(root, kind="trained", tag="better")
     r = client.post("/v1/candidates/promote", json={"version": better, "reason": "worker"}, headers=key)
     body = r.json()
     assert r.status_code == 200 and body["decision"] == "promote" and body["reason"] == "better"
@@ -488,7 +493,7 @@ def test_gate_promotes_a_better_candidate_only_after_integrity(gated: dict) -> N
 
 def test_integrity_failure_keeps_the_champion_even_for_a_better_candidate(gated: dict) -> None:
     client, root, key = gated["client"], gated["root"], gated["key"]
-    better = _register(root, epochs=3, tag="tampered")
+    better = _register(root, kind="trained", tag="tampered")
     with (root / "versions" / better / "model.onnx").open("ab") as fh:
         fh.write(b"\\0")
     r = client.post("/v1/candidates/promote", json={"version": better, "reason": "worker"}, headers=key)
@@ -505,7 +510,7 @@ def test_integrity_failure_keeps_the_champion_even_for_a_better_candidate(gated:
 def test_gate_holds_without_a_full_resolved_window(gated: dict) -> None:
     client, root, key = gated["client"], gated["root"], gated["key"]
     early = _register(
-        root, epochs=3, cutoff_row=L + 24 * 10, tag="early"
+        root, kind="trained", cutoff_row=L + 24 * 10, tag="early"
     )  # 10 days of history: no 14-day window
     r = client.post("/v1/candidates/promote", json={"version": early, "reason": "worker"}, headers=key)
     body = r.json()
@@ -516,8 +521,8 @@ def test_gate_holds_without_a_full_resolved_window(gated: dict) -> None:
 
 def test_forecasts_keep_flowing_through_reject_promote_and_rollback(gated: dict) -> None:
     client, root, key = gated["client"], gated["root"], gated["key"]
-    worse = _register(root, epochs=None, seed=3, tag="w2")
-    better = _register(root, epochs=3, tag="b2")
+    worse = _register(root, kind="bad", tag="w2")
+    better = _register(root, kind="trained", tag="b2")
     hist = client.get("/v1/replay/window").json()["history"]
     failures: list[int] = []
     versions: set[str] = set()
@@ -531,15 +536,17 @@ def test_forecasts_keep_flowing_through_reject_promote_and_rollback(gated: dict)
             else:
                 versions.add(resp.json()["model_version"])
 
-    threads = [threading.Thread(target=hammer) for _ in range(3)]
+    threads = [threading.Thread(target=hammer, daemon=True) for _ in range(3)]
     for t in threads:
         t.start()
-    assert client.post("/v1/candidates/promote", json={"version": worse}, headers=key).status_code == 409
-    assert client.post("/v1/candidates/promote", json={"version": better}, headers=key).status_code == 200
-    assert client.post("/v1/models/rollback", headers=key).status_code == 200
-    stop.set()
-    for t in threads:
-        t.join()
+    try:
+        assert client.post("/v1/candidates/promote", json={"version": worse}, headers=key).status_code == 409
+        assert client.post("/v1/candidates/promote", json={"version": better}, headers=key).status_code == 200
+        assert client.post("/v1/models/rollback", headers=key).status_code == 200
+    finally:
+        stop.set()
+        for t in threads:
+            t.join(timeout=30)
     assert failures == [] and versions <= {gated["champion"], better}
     assert client.get("/ready").json()["model"] == gated["champion"]
 
@@ -552,7 +559,7 @@ def test_online_and_offline_gates_agree_on_the_same_models_and_data(gated: dict)
     from metronome.serving.registry import Registry as Reg
 
     root, key, client = gated["root"], gated["key"], gated["client"]
-    candidate = _register(root, epochs=3, tag="agree")
+    candidate = _register(root, kind="trained", tag="agree")
     online = client.post("/v1/candidates/promote", json={"version": candidate}, headers=key).json()
     reg = Reg(root)
     dep = reg.deployment()
