@@ -3,9 +3,17 @@
 Policy names:
   never, periodic-<k>, ratio-<tau>, ph-<lambda>, adwin-<delta>, warm-1
   <any>+gate   — same schedule, but a refit only goes live if the candidate beats the incumbent
-                 on the 14 days before the refit (candidate validation MAE vs incumbent's realized
-                 MAE on those days). Added after the first ETTh1 results (post-hoc, see protocol
+                 on the same evaluation sample: the days of the candidate's validation span whose
+                 every forecast is resolved at the decision time, both measured by the cache on
+                 the fixed scale. Added after the first ETTh1 results (post-hoc, see protocol
                  change log); the pre-registered grid is the un-gated one.
+
+Time, for a refit decided on stream day D (protocol P6/P7): the candidate trains at D 00:00 on the
+rows before it; the decision uses only rows before D 00:00; the new model serves from D+1 00:00.
+A forecast whose origin (first target row) is on day d is resolved once its last target row has
+arrived, which for the last origin of the day is day d + ceil((H-1)/per_day) at the earliest, so
+the latest day whose every forecast is resolved at D 00:00 is D - resolve_lag_days(H, per_day).
+Detectors and the gate read nothing later than that.
 """
 
 from __future__ import annotations
@@ -20,8 +28,15 @@ import numpy as np
 from metronome.drift.detectors import make_detector
 from metronome.eval.bootstrap import paired_block_bootstrap
 
-RESOLVE_LAG_DAYS = 4  # a 96-step hourly forecast made on day D is fully resolved by the end of day D+3
-GATE_WINDOW_DAYS = 14
+
+def resolve_lag_days(horizon: int, per_day: int) -> int:
+    """Days between a decision at 00:00 of day D and the latest day whose every forecast is resolved.
+
+    The last origin of day d is row (d+1)*per_day - 1 and its last target is `horizon` - 1 rows
+    later; it is resolved at D 00:00 when that row is before row D*per_day, i.e. when
+    d <= D - 1 - ceil((horizon - 1) / per_day). Hourly data with H=96: 5 (days D-5 and earlier).
+    """
+    return 1 + -(-(horizon - 1) // per_day)
 
 
 @dataclass
@@ -35,6 +50,8 @@ class Cache:
     horizon: int
     config: dict[str, Any]
     epochs: np.ndarray | None = None  # (M,) epochs actually trained per cold refit
+    per_day: int = 24  # origins per stream day (the data period)
+    backward_days: int = 0  # days before its own day each model was also evaluated on (0: old cache)
 
     @property
     def n_days(self) -> int:
@@ -43,6 +60,10 @@ class Cache:
     @property
     def n_channels(self) -> int:
         return int(self.abs_sum.shape[2])
+
+    @property
+    def resolve_lag_days(self) -> int:
+        return resolve_lag_days(self.horizon, self.per_day)
 
     def denominators(self) -> np.ndarray:
         return self.count * self.horizon * self.n_channels
@@ -59,6 +80,8 @@ class Cache:
     def load(cls, cache_dir: Path, name: str) -> Cache:
         z = np.load(cache_dir / f"{name}.npz")
         meta = json.loads((cache_dir / f"{name}.json").read_text())
+        day_starts = z["day_starts"] if "day_starts" in z.files else None
+        per_day = int(day_starts[1] - day_starts[0]) if day_starts is not None and len(day_starts) > 1 else 24
         return cls(
             name=name,
             abs_sum=z["abs_sum"],
@@ -69,6 +92,8 @@ class Cache:
             horizon=int(meta["config"]["horizon"]),
             config=meta["config"],
             epochs=z["epochs"].astype(np.float64) if "epochs" in z.files else None,
+            per_day=per_day,
+            backward_days=int(meta.get("backward_days", 0)),
         )
 
 
@@ -87,6 +112,7 @@ class PolicyResult:
     train_epochs: float = (
         0.0  # epochs summed over trained models; unlike seconds, independent of machine load
     )
+    rejections: dict[str, int] = field(default_factory=dict)  # gate: why candidates did not go live
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -105,64 +131,118 @@ def _activate(n_days: int, refit_days: list[int]) -> np.ndarray:
     return active
 
 
-def gate_accepts(
-    cache: Cache, candidate_day: int, incumbent_day: int, window: int = GATE_WINDOW_DAYS
-) -> bool:
-    """Champion/challenger check on the `window` days before the refit.
+def resolved_days(cache: Cache, decision_day: int, window: int) -> np.ndarray:
+    """Stream days in [decision_day - window, decision_day) whose every forecast is resolved at
+    decision_day 00:00: the evaluation sample of a gate decision on that day."""
+    first = max(0, decision_day - window)
+    last = decision_day - cache.resolve_lag_days
+    return np.arange(first, last + 1) if last >= first else np.arange(0)
 
-    The candidate's validation MAE (its last `window` days, held out from its own training) is
-    compared with the incumbent's realized MAE on the same days. Equal or worse -> keep incumbent.
+
+@dataclass
+class GateDecision:
+    candidate_day: int
+    incumbent_day: int
+    days: list[int]  # the evaluation sample: complete stream days, every forecast resolved
+    candidate_mae: float
+    incumbent_mae: float
+    accept: bool
+    reason: str  # better | worse | tie | insufficient_sample | nonfinite | no_backward_window
+
+
+def gate_decide(cache: Cache, candidate_day: int, incumbent_day: int) -> GateDecision:
+    """Champion/challenger check with both models measured on the same days by the same cache.
+
+    The sample is the candidate's validation span (`cache.backward_days` days before its refit
+    day, held out from its weight fitting but used for its early stopping, so the comparison
+    favours the candidate slightly) restricted to the days whose every forecast is resolved at
+    the decision time. Both MAEs are the cache's per-day sums over those days on the fixed scale.
+    The candidate goes live only when its MAE is strictly lower; a short or non-finite sample
+    and a tie keep the incumbent.
     """
-    days = np.arange(max(0, candidate_day - window), candidate_day)
-    if len(days) == 0:
-        return True
+    window = cache.backward_days
+    nan = float("nan")
+    if window <= 0:
+        return GateDecision(candidate_day, incumbent_day, [], nan, nan, False, "no_backward_window")
+    days = resolved_days(cache, candidate_day, window)
+    needed = window - cache.resolve_lag_days + 1  # the full resolved window, nothing clipped
+    if needed < 1 or len(days) < needed:
+        return GateDecision(
+            candidate_day, incumbent_day, days.tolist(), nan, nan, False, "insufficient_sample"
+        )
+    candidate = cache.mae_over_days(candidate_day, days)
     incumbent = cache.mae_over_days(incumbent_day, days)
-    candidate = float(cache.val_mae_fixed[candidate_day])
-    return bool(np.isfinite(candidate) and candidate < incumbent)
+    if not (np.isfinite(candidate) and np.isfinite(incumbent)):
+        return GateDecision(
+            candidate_day, incumbent_day, days.tolist(), candidate, incumbent, False, "nonfinite"
+        )
+    if candidate < incumbent:
+        reason, accept = "better", True
+    elif candidate == incumbent:
+        reason, accept = "tie", False
+    else:
+        reason, accept = "worse", False
+    return GateDecision(candidate_day, incumbent_day, days.tolist(), candidate, incumbent, accept, reason)
 
 
-def gate_schedule(cache: Cache, refit_days: list[int]) -> tuple[list[int], list[int]]:
+def gate_accepts(cache: Cache, candidate_day: int, incumbent_day: int) -> bool:
+    return gate_decide(cache, candidate_day, incumbent_day).accept
+
+
+def gate_schedule(cache: Cache, refit_days: list[int]) -> tuple[list[int], list[int], dict[str, int]]:
+    """Apply the gate to a fixed schedule: (days that went live, days trained but kept out, why)."""
     accepted: list[int] = []
     rejected: list[int] = []
+    reasons: dict[str, int] = {}
     incumbent = 0
     for r in sorted(refit_days):
-        if gate_accepts(cache, r, incumbent):
+        decision = gate_decide(cache, r, incumbent)
+        if decision.accept:
             accepted.append(r)
             incumbent = r
         else:
             rejected.append(r)
-    return accepted, rejected
+            reasons[decision.reason] = reasons.get(decision.reason, 0) + 1
+    return accepted, rejected, reasons
 
 
-def schedule_triggered(cache: Cache, spec: str, *, gate: bool = False) -> tuple[list[int], list[int]]:
+def schedule_triggered(
+    cache: Cache, spec: str, *, gate: bool = False
+) -> tuple[list[int], list[int], dict[str, int]]:
     """Replay the stream day by day and ask the detector whether to refit.
 
-    The statistic fed to the detector on day D is the resolved daily MAE of the model that was
-    active on day D - RESOLVE_LAG_DAYS. After a refit on day D the detector is reset with the new
-    model's validation MAE as baseline; the new model serves from D + 1. With `gate`, a rejected
-    candidate leaves the incumbent (and its baseline) in place and only restarts the detector.
+    The statistic fed to the detector on day D is the daily MAE, of the model that was active then,
+    of the latest day whose every forecast is resolved at D 00:00 (D - resolve_lag_days). After a
+    refit on day D the detector is reset with the new model's validation MAE as baseline; the new
+    model serves from D + 1. With `gate`, a candidate that is kept out leaves the incumbent (and
+    its baseline) in place and only restarts the detector.
     """
     n_days = cache.n_days
+    lag = cache.resolve_lag_days
     detector = make_detector(spec, baseline=float(cache.val_mae_fixed[0]))
     refits: list[int] = []
     rejected: list[int] = []
+    reasons: dict[str, int] = {}
     active_model = 0
     for day in range(n_days):
-        lag_day = day - RESOLVE_LAG_DAYS
+        lag_day = day - lag
         if lag_day < 0:
             continue
         stat = cache.daily_mae(_model_on_day(refits, lag_day), lag_day)
         if not np.isfinite(stat):
             continue
         if detector.update(stat) and day + 1 < n_days:
-            if gate and not gate_accepts(cache, day, active_model):
-                rejected.append(day)
-                detector.reset(baseline=float(cache.val_mae_fixed[active_model]))
-                continue
+            if gate:
+                decision = gate_decide(cache, day, active_model)
+                if not decision.accept:
+                    rejected.append(day)
+                    reasons[decision.reason] = reasons.get(decision.reason, 0) + 1
+                    detector.reset(baseline=float(cache.val_mae_fixed[active_model]))
+                    continue
             refits.append(day)
             active_model = day
             detector.reset(baseline=float(cache.val_mae_fixed[day]))
-    return refits, rejected
+    return refits, rejected, reasons
 
 
 def _model_on_day(refits: list[int], day: int) -> int:
@@ -174,7 +254,11 @@ def _model_on_day(refits: list[int], day: int) -> int:
 
 
 def evaluate_schedule(
-    cache: Cache, policy: str, refit_days: list[int], rejected_days: list[int] | None = None
+    cache: Cache,
+    policy: str,
+    refit_days: list[int],
+    rejected_days: list[int] | None = None,
+    rejections: dict[str, int] | None = None,
 ) -> PolicyResult:
     n_days = cache.n_days
     rejected_days = rejected_days or []
@@ -201,6 +285,7 @@ def evaluate_schedule(
         train_epochs=float(np.nansum(cache.epochs[trained]))
         if (cache.epochs is not None and trained)
         else 0.0,
+        rejections=dict(rejections or {}),
     )
 
 
@@ -226,22 +311,26 @@ def run_policies(
     periodic: tuple[int, ...] = DEFAULT_PERIODIC,
     triggered: tuple[str, ...] = DEFAULT_TRIGGERED,
     *,
-    gated: bool = True,
+    gated: bool | None = None,
 ) -> dict[str, PolicyResult]:
+    """Every policy of the grid; `+gate` variants only when the cache carries the backward window
+    the gate needs (None = decide from the cache)."""
+    if gated is None:
+        gated = cache.backward_days > 0
     results: dict[str, PolicyResult] = {"never": evaluate_schedule(cache, "never", [])}
     for k in periodic:
         name = f"periodic-{k}"
         plain = schedule_periodic(cache.n_days, k)
         results[name] = evaluate_schedule(cache, name, plain)
         if gated:
-            acc, rej = gate_schedule(cache, plain)
-            results[f"{name}+gate"] = evaluate_schedule(cache, f"{name}+gate", acc, rej)
+            acc, rej, why = gate_schedule(cache, plain)
+            results[f"{name}+gate"] = evaluate_schedule(cache, f"{name}+gate", acc, rej, why)
     for spec in triggered:
-        refits, _ = schedule_triggered(cache, spec)
+        refits, _, _ = schedule_triggered(cache, spec)
         results[spec] = evaluate_schedule(cache, spec, refits)
         if gated:
-            acc, rej = schedule_triggered(cache, spec, gate=True)
-            results[f"{spec}+gate"] = evaluate_schedule(cache, f"{spec}+gate", acc, rej)
+            acc, rej, why = schedule_triggered(cache, spec, gate=True)
+            results[f"{spec}+gate"] = evaluate_schedule(cache, f"{spec}+gate", acc, rej, why)
     return results
 
 
