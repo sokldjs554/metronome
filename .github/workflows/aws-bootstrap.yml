@@ -114,22 +114,6 @@ jobs:
           )
           aws iam put-role-policy --role-name "$DEPLOY_ROLE" --policy-name metronome-deploy --policy-document "$policy"
           echo "deploy role policy written"
-      - name: ECS cluster and log group
-        run: |
-          aws ecs create-cluster --cluster-name "$CLUSTER" --query cluster.status --output text
-          aws logs create-log-group --log-group-name "$LOG_GROUP" 2>/dev/null || true
-          aws logs put-retention-policy --log-group-name "$LOG_GROUP" --retention-in-days 14
-          echo "cluster and log group ready"
-      - name: ECR repository (optional; the deploy workflow uses the public GHCR image when ECR is denied)
-        run: |
-          if aws ecr describe-repositories --repository-names "$ECR_REPO" >/dev/null 2>&1; then
-            echo "ECR repository exists"
-          elif out=$(aws ecr create-repository --repository-name "$ECR_REPO" --image-scanning-configuration scanOnPush=true 2>&1); then
-            echo "ECR repository created"
-          else
-            echo "$out" | sed 's/[0-9]\{12\}/***/g'
-            echo "::warning::ECR is denied in this account (organization policy). The deploy workflow pulls the public GHCR image instead."
-          fi
       - name: what this account may use (read-only probes, for the summary)
         run: |
           probe() {  # label, command...
@@ -155,8 +139,37 @@ jobs:
           probe "lightsail get-container-services" aws lightsail get-container-services
           probe "apprunner list-services" aws apprunner list-services
           probe "iam list-open-id-connect-providers" aws iam list-open-id-connect-providers
+          probe "ec2 describe-instances" aws ec2 describe-instances --max-items 1
+          probe "ec2 run-instances --dry-run (t3.small)" bash -c 'out=$(aws ec2 run-instances --dry-run --image-id resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id --instance-type t3.small 2>&1); case "$out" in *DryRunOperation*) exit 0;; *) echo "$out"; exit 1;; esac'
+          probe "ec2 describe-addresses (elastic IP)" aws ec2 describe-addresses
+          probe "elasticbeanstalk describe-applications" aws elasticbeanstalk describe-applications
+          probe "cloudfront list-distributions" aws cloudfront list-distributions --max-items 1
+          probe "route53 list-hosted-zones" aws route53 list-hosted-zones --max-items 1
+          probe "s3 list-buckets" aws s3api list-buckets
+          probe "budgets describe-budgets" aws budgets describe-budgets --account-id "$ACCOUNT" --max-results 1
           cat probes.md
           { echo "### Service probes"; cat probes.md; echo; } >> "$GITHUB_STEP_SUMMARY"
+      - name: ECS cluster and log group
+        run: |
+          if out=$(aws ecs create-cluster --cluster-name "$CLUSTER" --query cluster.status --output text 2>&1); then
+            echo "cluster $CLUSTER: $out"; echo "ECS=yes" >> "$GITHUB_ENV"
+          else
+            echo "$out" | sed 's/[0-9]\{12\}/***/g'
+            echo "::warning::ECS is denied in this account (organization policy); see the probe table for what is allowed."
+            echo "ECS=no" >> "$GITHUB_ENV"
+          fi
+          aws logs create-log-group --log-group-name "$LOG_GROUP" 2>/dev/null || true
+          aws logs put-retention-policy --log-group-name "$LOG_GROUP" --retention-in-days 14 || true
+      - name: ECR repository (optional; the deploy workflow uses the public GHCR image when ECR is denied)
+        run: |
+          if aws ecr describe-repositories --repository-names "$ECR_REPO" >/dev/null 2>&1; then
+            echo "ECR repository exists"
+          elif out=$(aws ecr create-repository --repository-name "$ECR_REPO" --image-scanning-configuration scanOnPush=true 2>&1); then
+            echo "ECR repository created"
+          else
+            echo "$out" | sed 's/[0-9]\{12\}/***/g'
+            echo "::warning::ECR is denied in this account (organization policy). The deploy workflow pulls the public GHCR image instead."
+          fi
       - name: summary
         run: |
           {
