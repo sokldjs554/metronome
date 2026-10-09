@@ -45,15 +45,18 @@ jobs:
             *":root") echo "::warning::These are root-user access keys. Create an IAM user (or use this workflow's deploy role) and delete the root keys." ;;
           esac
           echo "caller type: ${caller##*:}" | sed 's/[0-9]\{12\}/***/g'
-      - name: GitHub OIDC provider
+      - name: GitHub OIDC provider (best effort; an organization policy may forbid it)
         run: |
           arn="arn:aws:iam::$ACCOUNT:oidc-provider/token.actions.githubusercontent.com"
           if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$arn" >/dev/null 2>&1; then
-            echo "OIDC provider exists"
+            echo "OIDC provider exists"; echo "OIDC=yes" >> "$GITHUB_ENV"
+          elif out=$(aws iam create-open-id-connect-provider --url https://token.actions.githubusercontent.com \
+                 --client-id-list sts.amazonaws.com --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 2>&1); then
+            echo "OIDC provider created"; echo "OIDC=yes" >> "$GITHUB_ENV"
           else
-            aws iam create-open-id-connect-provider --url https://token.actions.githubusercontent.com \
-              --client-id-list sts.amazonaws.com --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 >/dev/null
-            echo "OIDC provider created"
+            echo "$out" | sed 's/[0-9]\{12\}/***/g'
+            echo "::warning::Could not create the GitHub OIDC provider (usually an organization service control policy). Deployments will keep using the access keys; AWS_ROLE_ARN stays unset."
+            echo "OIDC=no" >> "$GITHUB_ENV"
           fi
       - name: roles
         run: |
@@ -81,6 +84,10 @@ jobs:
           [ -n "$infra_policy" ] && [ "$infra_policy" != "None" ] || { echo "::error::managed policy AmazonECSInfrastructureRoleforExpressGatewayServices not found"; exit 1; }
           aws iam attach-role-policy --role-name "$INFRA_ROLE" --policy-arn "$infra_policy"
 
+          if [ "$OIDC" != "yes" ]; then
+            echo "skipping the deploy role: no OIDC provider"
+            exit 0
+          fi
           trust=$(cat <<JSON
           {"Version":"2012-10-17","Statement":[{"Effect":"Allow",
             "Principal":{"Federated":"arn:aws:iam::$ACCOUNT:oidc-provider/token.actions.githubusercontent.com"},
@@ -126,6 +133,10 @@ jobs:
             echo "- OIDC provider, roles \`$DEPLOY_ROLE\`, \`$EXEC_ROLE\`, \`$INFRA_ROLE\`"
             echo "- ECR \`$ECR_REPO\`, ECS cluster \`$CLUSTER\`, log group \`$LOG_GROUP\`"
             echo
-            echo "Optional, for keyless deploys: add the repository secret \`AWS_ROLE_ARN\` ="
-            echo "\`arn:aws:iam::<account id>:role/$DEPLOY_ROLE\` and then delete the access keys."
+            if [ "$OIDC" = "yes" ]; then
+              echo "Optional, for keyless deploys: add the repository secret \`AWS_ROLE_ARN\` ="
+              echo "\`arn:aws:iam::<account id>:role/$DEPLOY_ROLE\` and then delete the access keys."
+            else
+              echo "OIDC provider not allowed in this account: deployments use the access-key secrets."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
