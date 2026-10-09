@@ -1,0 +1,131 @@
+name: aws-bootstrap
+
+# One-time (idempotent) setup of the AWS side of the demo deployment, run by hand. It uses the
+# account's access keys from the repository secrets AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY and
+# creates, in ap-northeast-2 (Seoul):
+#   - the GitHub OIDC identity provider and a deploy role that only this repository's main branch
+#     can assume (so the keys can be deleted afterwards and deployments become keyless),
+#   - the ECS task execution role and the ECS infrastructure role Express Mode needs,
+#   - the ECR repository (keeps the last 10 images), the ECS cluster and the CloudWatch log group.
+# Re-running it changes nothing that already exists except the trust and inline policies, which it
+# rewrites to the values below.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+  REPO: ${{ github.repository }}
+  CLUSTER: metronome
+  ECR_REPO: metronome-demo
+  LOG_GROUP: /ecs/metronome-demo
+  DEPLOY_ROLE: metronome-github-deploy
+  EXEC_ROLE: metronome-ecs-execution
+  INFRA_ROLE: metronome-ecs-infrastructure
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: who am I (account id is masked in the public log)
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::$ACCOUNT"
+          echo "ACCOUNT=$ACCOUNT" >> "$GITHUB_ENV"
+          caller=$(aws sts get-caller-identity --query Arn --output text)
+          case "$caller" in
+            *":root") echo "::warning::These are root-user access keys. Create an IAM user (or use this workflow's deploy role) and delete the root keys." ;;
+          esac
+          echo "caller type: ${caller##*:}" | sed 's/[0-9]\{12\}/***/g'
+      - name: GitHub OIDC provider
+        run: |
+          arn="arn:aws:iam::$ACCOUNT:oidc-provider/token.actions.githubusercontent.com"
+          if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$arn" >/dev/null 2>&1; then
+            echo "OIDC provider exists"
+          else
+            aws iam create-open-id-connect-provider --url https://token.actions.githubusercontent.com \
+              --client-id-list sts.amazonaws.com --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 >/dev/null
+            echo "OIDC provider created"
+          fi
+      - name: roles
+        run: |
+          ensure_role() {  # name, trust policy JSON
+            if aws iam get-role --role-name "$1" >/dev/null 2>&1; then
+              aws iam update-assume-role-policy --role-name "$1" --policy-document "$2"
+              echo "role $1 exists (trust policy refreshed)"
+            else
+              aws iam create-role --role-name "$1" --assume-role-policy-document "$2" >/dev/null
+              echo "role $1 created"
+            fi
+          }
+          service_trust() {
+            printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"%s"},"Action":"sts:AssumeRole"}]}' "$1"
+          }
+          aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com >/dev/null 2>&1 || true
+
+          ensure_role "$EXEC_ROLE" "$(service_trust ecs-tasks.amazonaws.com)"
+          aws iam attach-role-policy --role-name "$EXEC_ROLE" \
+            --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+          ensure_role "$INFRA_ROLE" "$(service_trust ecs.amazonaws.com)"
+          infra_policy=$(aws iam list-policies --scope AWS \
+            --query "Policies[?PolicyName=='AmazonECSInfrastructureRoleforExpressGatewayServices'].Arn | [0]" --output text)
+          [ -n "$infra_policy" ] && [ "$infra_policy" != "None" ] || { echo "::error::managed policy AmazonECSInfrastructureRoleforExpressGatewayServices not found"; exit 1; }
+          aws iam attach-role-policy --role-name "$INFRA_ROLE" --policy-arn "$infra_policy"
+
+          trust=$(cat <<JSON
+          {"Version":"2012-10-17","Statement":[{"Effect":"Allow",
+            "Principal":{"Federated":"arn:aws:iam::$ACCOUNT:oidc-provider/token.actions.githubusercontent.com"},
+            "Action":"sts:AssumeRoleWithWebIdentity",
+            "Condition":{"StringEquals":{"token.actions.githubusercontent.com:aud":"sts.amazonaws.com",
+                                         "token.actions.githubusercontent.com:sub":"repo:$REPO:ref:refs/heads/main"}}}]}
+          JSON
+          )
+          ensure_role "$DEPLOY_ROLE" "$trust"
+          policy=$(cat <<JSON
+          {"Version":"2012-10-17","Statement":[
+            {"Effect":"Allow","Action":"ecr:GetAuthorizationToken","Resource":"*"},
+            {"Effect":"Allow","Action":["ecr:BatchCheckLayerAvailability","ecr:BatchGetImage","ecr:CompleteLayerUpload",
+              "ecr:DescribeImages","ecr:DescribeRepositories","ecr:GetDownloadUrlForLayer","ecr:InitiateLayerUpload",
+              "ecr:PutImage","ecr:UploadLayerPart"],
+             "Resource":"arn:aws:ecr:$AWS_REGION:$ACCOUNT:repository/$ECR_REPO"},
+            {"Effect":"Allow","Action":["ecs:*"],"Resource":"*"},
+            {"Effect":"Allow","Action":"iam:PassRole",
+             "Resource":["arn:aws:iam::$ACCOUNT:role/$EXEC_ROLE","arn:aws:iam::$ACCOUNT:role/$INFRA_ROLE"]},
+            {"Effect":"Allow","Action":["ec2:Describe*","elasticloadbalancing:Describe*","application-autoscaling:Describe*",
+              "logs:Describe*","logs:GetLogEvents","logs:FilterLogEvents","cloudwatch:GetMetricData","acm:DescribeCertificate"],
+             "Resource":"*"}]}
+          JSON
+          )
+          aws iam put-role-policy --role-name "$DEPLOY_ROLE" --policy-name metronome-deploy --policy-document "$policy"
+          echo "deploy role policy written"
+      - name: ECR repository, ECS cluster, log group
+        run: |
+          if ! aws ecr describe-repositories --repository-names "$ECR_REPO" >/dev/null 2>&1; then
+            aws ecr create-repository --repository-name "$ECR_REPO" --image-scanning-configuration scanOnPush=true >/dev/null
+            echo "ECR repository created"
+          fi
+          aws ecr put-lifecycle-policy --repository-name "$ECR_REPO" --lifecycle-policy-text \
+            '{"rules":[{"rulePriority":1,"description":"keep the last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' >/dev/null
+          aws ecs create-cluster --cluster-name "$CLUSTER" >/dev/null
+          aws logs create-log-group --log-group-name "$LOG_GROUP" 2>/dev/null || true
+          aws logs put-retention-policy --log-group-name "$LOG_GROUP" --retention-in-days 14
+          echo "ECR, cluster and log group ready"
+      - name: summary
+        run: |
+          {
+            echo "### AWS bootstrap done ($AWS_REGION)"
+            echo "- OIDC provider, roles \`$DEPLOY_ROLE\`, \`$EXEC_ROLE\`, \`$INFRA_ROLE\`"
+            echo "- ECR \`$ECR_REPO\`, ECS cluster \`$CLUSTER\`, log group \`$LOG_GROUP\`"
+            echo
+            echo "Optional, for keyless deploys: add the repository secret \`AWS_ROLE_ARN\` ="
+            echo "\`arn:aws:iam::<account id>:role/$DEPLOY_ROLE\` and then delete the access keys."
+          } >> "$GITHUB_STEP_SUMMARY"
