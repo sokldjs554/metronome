@@ -139,6 +139,20 @@ weather 와 electricity20 은 매일 재학습의 이득이 확인되지 않아 
 정정 전 값은 ETTh1 ratio-0.2+gate −0.16%, ETTh2 ph-0.1+gate 0.3184 였고, 재생성이 끝나면 같은 자리에 정정 후 값을 적습니다.
 시드 3개의 정정 후 게이트 수치는 아래 "사후 탐색" 표에 있습니다.
 
+## 사후 확인: 모델을 바꾸면 (ETTh2, NLinear, 시드 1개)
+
+2026-10-09 제출 직전에 "정책 비교가 DLinear 하나에서만 됐다"는 한계를 보려고 ETTh2 시드 0 의 캐시를 NLinear 로 다시 만들어(`metronome cache etth2 --seed 0 --model nlinear`) 같은 정책을 돌렸습니다(`artifacts/cadence_sens/`). 시드 하나·데이터셋 하나의 사후 확인이라 가설 판정에는 쓰지 않습니다.
+
+| 정책 | NLinear MAE (교체) | DLinear 시드 0 MAE (교체) |
+|---|---|---|
+| never | <!-- num:artifacts/cadence_sens/etth2_nlinear_s0.json#policies/never/mae:.4f -->0.3159<!-- /num --> | 0.3336 |
+| periodic-1 | <!-- num:artifacts/cadence_sens/etth2_nlinear_s0.json#policies/periodic-1/mae:.4f -->0.3118<!-- /num --> (364) | 0.3162 (364) |
+| periodic-7 | <!-- num:artifacts/cadence_sens/etth2_nlinear_s0.json#policies/periodic-7/mae:.4f -->0.3121<!-- /num --> (52) | 0.3150 (52) |
+| ph-0.1 | <!-- num:artifacts/cadence_sens/etth2_nlinear_s0.json#policies/ph-0.1/mae:.4f -->0.3194<!-- /num --> (<!-- num:artifacts/cadence_sens/etth2_nlinear_s0.json#policies/ph-0.1/n_refits:d -->20<!-- /num -->) | 0.3189 (21) |
+| ph-0.1+gate | <!-- num:artifacts/cadence_sens/etth2_nlinear_s0.json#policies/ph-0.1+gate/mae:.4f -->0.3117<!-- /num --> (<!-- num:artifacts/cadence_sens/etth2_nlinear_s0.json#policies/ph-0.1+gate/n_refits:d -->16<!-- /num -->) | 0.3178 (12) |
+
+재학습이 돕는 방향은 같지만 크기는 작습니다(NLinear 는 마지막 값으로 정규화해 수준 이동을 스스로 흡수하므로 never 가 이미 낮음). Page–Hinkley 단독은 never 보다 나쁘고, 게이트를 붙이면 매일 수준입니다. "효과는 데이터마다(그리고 모델마다) 달라 배포 전에 재야 한다"는 결론은 유지되고, 검출기 단독보다 게이트가 중요하다는 점이 하나 더 보입니다.
+
 ## 사후 탐색: 승격 게이트 (+gate)
 
 프로토콜 밖에서 추가한 변형입니다(변경 이력 참고). 재학습 날 D 에 후보와 현역을 **후보의 검증 구간(D−14..D−1) 중 D 00:00 에 모든 예측이 완결된 날(D−14..D−5, 10일 240 origin)** 에서 같은 캐시 배열·같은 고정 척도로 비교해, 후보의 MAE 가 더 낮을 때만 교체합니다. 표본이 모자라거나(스트림 시작 뒤 14일 전) 동률이면 현역을 유지합니다. 이 날들은 후보의 조기 종료에 쓰인 검증 구간이라 비교는 후보에게 조금 유리합니다. 2026-10-09 정정 전에는 후보의 검증 MAE(241 origin)를 현역의 직전 14일 MAE(336 origin, 마지막 4일은 결정 뒤 도착하는 정답 포함)와 비교했습니다(변경 이력 참고). 아래 표는 정정 후 수치이고, 정정 전후 비교는 그 아래에 있습니다.
