@@ -1,0 +1,51 @@
+name: gate-review
+
+on:
+  push:
+    branches: [fix/causal-promotion-gate]
+    paths: [.github/workflows/gate-review.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install test dependencies
+        run: |
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -e '.[train,export,dev]'
+      - name: Baseline suite before the gate correction
+        run: |
+          mkdir -p review-input
+          set -o pipefail
+          python -m pytest -q --junitxml=review-input/baseline.xml 2>&1 | tee review-input/baseline.log
+      - name: Prepare pinned public benchmark inputs
+        run: |
+          for dataset in etth1 etth2 weather electricity20; do
+            metronome prepare "$dataset"
+          done
+          tar -czf review-input/prepared-data.tar.gz data/processed
+      - name: Snapshot source and offline verification dependencies
+        run: |
+          git rev-parse HEAD > review-input/source-sha.txt
+          git archive --format=tar.gz HEAD > review-input/source.tar.gz
+          python -m pip download --only-binary=:all: --dest review-input/wheels 'polars>=1,<2' 'onnx>=1.16,<2' 'onnxruntime>=1.18,<2' 'onnxscript>=0.2,<1' 'ruff>=0.6,<1' 'mypy>=1.10,<2' types-PyYAML
+          python -m pip freeze > review-input/environment.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-review-input
+          path: review-input
+          retention-days: 7
+          if-no-files-found: error
