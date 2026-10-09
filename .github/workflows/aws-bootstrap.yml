@@ -114,24 +114,55 @@ jobs:
           )
           aws iam put-role-policy --role-name "$DEPLOY_ROLE" --policy-name metronome-deploy --policy-document "$policy"
           echo "deploy role policy written"
-      - name: ECR repository, ECS cluster, log group
+      - name: ECS cluster and log group
         run: |
-          if ! aws ecr describe-repositories --repository-names "$ECR_REPO" >/dev/null 2>&1; then
-            aws ecr create-repository --repository-name "$ECR_REPO" --image-scanning-configuration scanOnPush=true >/dev/null
-            echo "ECR repository created"
-          fi
-          aws ecr put-lifecycle-policy --repository-name "$ECR_REPO" --lifecycle-policy-text \
-            '{"rules":[{"rulePriority":1,"description":"keep the last 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}' >/dev/null
-          aws ecs create-cluster --cluster-name "$CLUSTER" >/dev/null
+          aws ecs create-cluster --cluster-name "$CLUSTER" --query cluster.status --output text
           aws logs create-log-group --log-group-name "$LOG_GROUP" 2>/dev/null || true
           aws logs put-retention-policy --log-group-name "$LOG_GROUP" --retention-in-days 14
-          echo "ECR, cluster and log group ready"
+          echo "cluster and log group ready"
+      - name: ECR repository (optional; the deploy workflow uses the public GHCR image when ECR is denied)
+        run: |
+          if aws ecr describe-repositories --repository-names "$ECR_REPO" >/dev/null 2>&1; then
+            echo "ECR repository exists"
+          elif out=$(aws ecr create-repository --repository-name "$ECR_REPO" --image-scanning-configuration scanOnPush=true 2>&1); then
+            echo "ECR repository created"
+          else
+            echo "$out" | sed 's/[0-9]\{12\}/***/g'
+            echo "::warning::ECR is denied in this account (organization policy). The deploy workflow pulls the public GHCR image instead."
+          fi
+      - name: what this account may use (read-only probes, for the summary)
+        run: |
+          probe() {  # label, command...
+            local label=$1; shift
+            if out=$("$@" 2>&1); then echo "| $label | allowed |" >> probes.md
+            else
+              case "$out" in
+                *"service control policy"*) echo "| $label | denied by organization policy |" >> probes.md ;;
+                *AccessDenied*|*UnauthorizedOperation*) echo "| $label | denied (IAM) |" >> probes.md ;;
+                *) echo "| $label | error: $(echo "$out" | tail -1 | cut -c1-80 | sed 's/[0-9]\{12\}/***/g') |" >> probes.md ;;
+              esac
+            fi
+          }
+          echo "| probe | result |" > probes.md; echo "|---|---|" >> probes.md
+          probe "ecs list-clusters" aws ecs list-clusters
+          probe "ec2 describe-vpcs (default VPC)" aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query "Vpcs[0].VpcId" --output text
+          probe "ec2 describe-subnets" aws ec2 describe-subnets --query "Subnets[].SubnetId" --output text
+          probe "elbv2 describe-load-balancers" aws elbv2 describe-load-balancers
+          probe "application-autoscaling describe" aws application-autoscaling describe-scalable-targets --service-namespace ecs
+          probe "acm list-certificates" aws acm list-certificates
+          probe "ecr describe-repositories" aws ecr describe-repositories
+          probe "lambda list-functions" aws lambda list-functions --max-items 1
+          probe "lightsail get-container-services" aws lightsail get-container-services
+          probe "apprunner list-services" aws apprunner list-services
+          probe "iam list-open-id-connect-providers" aws iam list-open-id-connect-providers
+          cat probes.md
+          { echo "### Service probes"; cat probes.md; echo; } >> "$GITHUB_STEP_SUMMARY"
       - name: summary
         run: |
           {
             echo "### AWS bootstrap done ($AWS_REGION)"
             echo "- OIDC provider, roles \`$DEPLOY_ROLE\`, \`$EXEC_ROLE\`, \`$INFRA_ROLE\`"
-            echo "- ECR \`$ECR_REPO\`, ECS cluster \`$CLUSTER\`, log group \`$LOG_GROUP\`"
+            echo "- ECS cluster \`$CLUSTER\`, log group \`$LOG_GROUP\` (ECR only if the account allows it)"
             echo
             if [ "$OIDC" = "yes" ]; then
               echo "Optional, for keyless deploys: add the repository secret \`AWS_ROLE_ARN\` ="
