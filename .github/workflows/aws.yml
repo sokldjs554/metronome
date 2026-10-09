@@ -1,0 +1,233 @@
+name: aws
+
+# Continuous deployment of the server demo to AWS: ECR + ECS Express Mode (Fargate behind an
+# Application Load Balancer with an AWS-provided HTTPS address) in ap-northeast-2 (Seoul).
+# Every change to the demo on main builds Dockerfile.demo, pushes it to ECR as sha-<commit>, points the
+# Express service at that exact image, waits until the service is stable on it, and runs the same
+# checks as cloud-smoke against the public address. Credentials: the keyless deploy role from
+# aws-bootstrap when the secret AWS_ROLE_ARN is set (GitHub OIDC), otherwise the access keys.
+# Run by hand with a tag to roll back to an earlier image without rebuilding, or with
+# action=delete to remove the service (and its load balancer) when the demo is no longer needed.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "Dockerfile.demo"
+      - "docs/demo/metronome-replay.html"
+      - ".github/workflows/aws.yml"
+      - ".github/workflows/cloud-smoke.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing ECR tag to deploy instead of building this commit, e.g. sha-<commit> (roll back)"
+        required: false
+      action:
+        description: "deploy, or delete to remove the service"
+        required: false
+        default: deploy
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: aws-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-2
+  CLUSTER: metronome
+  SERVICE: metronome-demo
+  ECR_REPO: metronome-demo
+  LOG_GROUP: /ecs/metronome-demo
+  EXEC_ROLE: metronome-ecs-execution
+  INFRA_ROLE: metronome-ecs-infrastructure
+
+jobs:
+  gate:
+    # Secrets cannot be read in a job-level `if`, so this job decides whether AWS is configured.
+    runs-on: ubuntu-24.04
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          HAS_ROLE: ${{ secrets.AWS_ROLE_ARN != '' }}
+          HAS_KEYS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        run: |
+          if [ "$HAS_ROLE" = "true" ] || [ "$HAS_KEYS" = "true" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "AWS is not configured (no AWS_ROLE_ARN or access-key secrets); skipping." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  publish:
+    needs: gate
+    if: ${{ needs.gate.outputs.enabled == 'true' && !inputs.tag && inputs.action != 'delete' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      HAS_ROLE: ${{ secrets.AWS_ROLE_ARN != '' }}
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: credentials (OIDC role)
+        if: ${{ env.HAS_ROLE == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: credentials (access keys)
+        if: ${{ env.HAS_ROLE != 'true' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          mask-password: "true"
+      - id: push
+        name: build and push sha-<commit> to ECR
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          echo "::add-mask::${REGISTRY%%.*}"
+          image="$REGISTRY/$ECR_REPO:sha-$GITHUB_SHA"
+          docker build -f Dockerfile.demo \
+            --label org.opencontainers.image.source="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" -t "$image" .
+          docker push "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "pushed $ECR_REPO:sha-$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: [gate, publish]
+    if: ${{ !cancelled() && needs.gate.outputs.enabled == 'true' && (needs.publish.result == 'success' || needs.publish.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      HAS_ROLE: ${{ secrets.AWS_ROLE_ARN != '' }}
+    outputs:
+      url: ${{ steps.url.outputs.url }}
+    steps:
+      - name: credentials (OIDC role)
+        if: ${{ env.HAS_ROLE == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: credentials (access keys)
+        if: ${{ env.HAS_ROLE != 'true' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: AWS CLI knows ECS Express Mode
+        run: |
+          if ! aws ecs create-express-gateway-service help >/dev/null 2>&1; then
+            curl -sSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscli.zip
+            unzip -q /tmp/awscli.zip -d /tmp && sudo /tmp/aws/install --update
+          fi
+          aws --version
+      - id: service
+        name: create, update or delete the Express service
+        env:
+          BUILT_IMAGE: ${{ needs.publish.outputs.image }}
+          TAG: ${{ inputs.tag }}
+          ACTION: ${{ inputs.action || 'deploy' }}
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::$ACCOUNT"
+          arn=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+                --query "services[?status=='ACTIVE'].serviceArn | [0]" --output text 2>/dev/null || true)
+          [ "$arn" = "None" ] && arn=""
+
+          if [ "$ACTION" = "delete" ]; then
+            [ -n "$arn" ] || { echo "nothing to delete"; exit 0; }
+            aws ecs delete-express-gateway-service --service-arn "$arn" >/dev/null
+            echo "### deleted $SERVICE" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ -n "$TAG" ]; then
+            image="$ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$TAG"
+          else
+            image="$BUILT_IMAGE"
+          fi
+          [ -n "$image" ] || { echo "::error::no image to deploy"; exit 1; }
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+          container=$(jq -cn --arg image "$image" --arg lg "$LOG_GROUP" '{
+              image: $image, containerPort: 8000,
+              awsLogsConfiguration: {logGroup: $lg, logStreamPrefix: "ecs"},
+              environment: [{name: "PORT", value: "8000"}]}')
+
+          if [ -z "$arn" ]; then
+            arn=$(aws ecs create-express-gateway-service \
+              --cluster "$CLUSTER" --service-name "$SERVICE" \
+              --execution-role-arn "arn:aws:iam::$ACCOUNT:role/$EXEC_ROLE" \
+              --infrastructure-role-arn "arn:aws:iam::$ACCOUNT:role/$INFRA_ROLE" \
+              --health-check-path /ready --cpu 1024 --memory 2048 \
+              --primary-container "$container" \
+              --scaling-target minTaskCount=1,maxTaskCount=1 \
+              --tags key=project,value=metronome \
+              --query service.serviceArn --output text)
+            echo "created $SERVICE"
+          else
+            aws ecs update-express-gateway-service --service-arn "$arn" \
+              --primary-container "$container" --health-check-path /ready --cpu 1024 --memory 2048 \
+              --scaling-target minTaskCount=1,maxTaskCount=1 >/dev/null
+            echo "updated $SERVICE"
+          fi
+          echo "SERVICE_ARN=$arn" >> "$GITHUB_ENV"
+      - name: the running task serves this image
+        if: ${{ (inputs.action || 'deploy') != 'delete' }}
+        run: |
+          # ECS replaces the task only after the new one passes the load balancer's /ready check.
+          for i in $(seq 1 60); do
+            read -r rollout td <<<"$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+              --query "services[0].deployments[?status=='PRIMARY'] | [0].[rolloutState, taskDefinition]" --output text)"
+            running=$(aws ecs describe-task-definition --task-definition "$td" \
+              --query "taskDefinition.containerDefinitions[0].image" --output text)
+            echo "attempt $i: rollout=$rollout image=${running##*/}"
+            if [ "$rollout" = "COMPLETED" ] && [ "$running" = "$IMAGE" ]; then exit 0; fi
+            if [ "$rollout" = "FAILED" ]; then break; fi
+            sleep 15
+          done
+          echo "::error::the service did not become stable on ${IMAGE##*/}"
+          aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+            --query "services[0].events[:10].message" --output text | sed 's/[0-9]\{12\}/***/g'
+          exit 1
+      - name: public address answers
+        id: url
+        if: ${{ (inputs.action || 'deploy') != 'delete' }}
+        run: |
+          endpoint=$(aws ecs describe-express-gateway-service --service-arn "$SERVICE_ARN" \
+            --query "service.activeConfigurations[0].ingressPaths[0].endpoint" --output text)
+          case "$endpoint" in http*) url="$endpoint" ;; *) url="https://$endpoint" ;; esac
+          url="${url%/}"
+          # A new service's certificate and DNS name can take a few minutes to appear.
+          for i in $(seq 1 40); do
+            code=$(curl -s -m 30 -o ready.json -w "%{http_code}" "$url/ready" || echo 000)
+            echo "attempt $i: HTTP $code $(head -c 120 ready.json 2>/dev/null)"
+            [ "$code" = "200" ] && break
+            sleep 15
+          done
+          [ "$code" = "200" ] || { echo "::error::$url/ready never returned 200"; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "### ${IMAGE##*/} -> $url" >> "$GITHUB_STEP_SUMMARY"
+
+  smoke:
+    needs: deploy
+    if: ${{ needs.deploy.outputs.url != '' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/cloud-smoke.yml
+    with:
+      url: ${{ needs.deploy.outputs.url }}
