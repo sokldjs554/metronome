@@ -39,3 +39,4 @@ artifacts/demo/
 # regenerated caches land here first (scripts/run_cache_regen.sh), then replace artifacts/cache
 artifacts/cache_v2/
 artifacts/cache_old/
+artifacts/cache_sens/
