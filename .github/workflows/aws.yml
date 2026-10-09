@@ -1,8 +1,10 @@
 name: aws
 
-# Continuous deployment of the server demo to AWS: ECR + ECS Express Mode (Fargate behind an
-# Application Load Balancer with an AWS-provided HTTPS address) in ap-northeast-2 (Seoul).
-# Every change to the demo on main builds Dockerfile.demo, pushes it to ECR as sha-<commit>, points the
+# Continuous deployment of the server demo to AWS: ECS Express Mode (Fargate behind an Application
+# Load Balancer with an AWS-provided HTTPS address) in ap-southeast-2 (Sydney), pulling the public
+# demo image from GHCR (the same metronome-demo:sha-<commit> the azure workflow deploys; ECR is not
+# required, which matters in accounts where an organization policy denies it).
+# Every change to the demo on main builds Dockerfile.demo, pushes it to GHCR as sha-<commit>, points the
 # Express service at that exact image, waits until the service is stable on it, and runs the same
 # checks as cloud-smoke against the public address. Credentials: the keyless deploy role from
 # aws-bootstrap when the secret AWS_ROLE_ARN is set (GitHub OIDC), otherwise the access keys.
@@ -30,6 +32,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
   id-token: write
 
 concurrency:
@@ -37,10 +40,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  AWS_REGION: ap-northeast-2
+  AWS_REGION: ap-southeast-2   # the only region this account's organization policy allows (see the probe table)
   CLUSTER: metronome
   SERVICE: metronome-demo
-  ECR_REPO: metronome-demo
+  IMAGE: ghcr.io/${{ github.repository_owner }}/metronome-demo
   LOG_GROUP: /ecs/metronome-demo
   EXEC_ROLE: metronome-ecs-execution
   INFRA_ROLE: metronome-ecs-infrastructure
@@ -69,42 +72,33 @@ jobs:
     if: ${{ needs.gate.outputs.enabled == 'true' && !inputs.tag && inputs.action != 'delete' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
-    env:
-      HAS_ROLE: ${{ secrets.AWS_ROLE_ARN != '' }}
     outputs:
       image: ${{ steps.push.outputs.image }}
     steps:
       - uses: actions/checkout@v7
-      - name: credentials (OIDC role)
-        if: ${{ env.HAS_ROLE == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: docker/login-action@v3
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - name: credentials (access keys)
-        if: ${{ env.HAS_ROLE != 'true' }}
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-      - id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
-        with:
-          mask-password: "true"
+          registry: ghcr.io
+          username: "${{ github.actor }}"
+          password: "${{ secrets.GITHUB_TOKEN }}"
       - id: push
-        name: build and push sha-<commit> to ECR
-        env:
-          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        name: build and push sha-<commit> to GHCR
         run: |
-          echo "::add-mask::${REGISTRY%%.*}"
-          image="$REGISTRY/$ECR_REPO:sha-$GITHUB_SHA"
+          image="$IMAGE:sha-$GITHUB_SHA"
           docker build -f Dockerfile.demo \
             --label org.opencontainers.image.source="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
             --label org.opencontainers.image.revision="$GITHUB_SHA" -t "$image" .
           docker push "$image"
           echo "image=$image" >> "$GITHUB_OUTPUT"
-          echo "pushed $ECR_REPO:sha-$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "pushed $image" >> "$GITHUB_STEP_SUMMARY"
+      - name: image is publicly pullable (Fargate pulls it without credentials)
+        run: |
+          tok=$(curl -sf "https://ghcr.io/token?scope=repository:${{ github.repository_owner }}/metronome-demo:pull" \
+                | python3 -c 'import sys, json; print(json.load(sys.stdin)["token"])')
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $tok" \
+                 -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
+                 "https://ghcr.io/v2/${{ github.repository_owner }}/metronome-demo/manifests/sha-$GITHUB_SHA")
+          [ "$code" = "200" ] || { echo "::error::$IMAGE is not publicly pullable (HTTP $code): package settings -> Change visibility -> Public"; exit 1; }
 
   deploy:
     needs: [gate, publish]
@@ -157,7 +151,7 @@ jobs:
           fi
 
           if [ -n "$TAG" ]; then
-            image="$ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$TAG"
+            image="$IMAGE:$TAG"
           else
             image="$BUILT_IMAGE"
           fi
@@ -168,6 +162,11 @@ jobs:
               awsLogsConfiguration: {logGroup: $lg, logStreamPrefix: "ecs"},
               environment: [{name: "PORT", value: "8000"}]}')
 
+          # Remembered so the next step can tell a fresh deployment from the previous one's leftovers.
+          prev=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+            --query "services[0].deployments[?status=='PRIMARY'] | [0].id" --output text 2>/dev/null || true)
+          [ "$prev" = "None" ] && prev=""
+          echo "PREV_DEPLOYMENT=$prev" >> "$GITHUB_ENV"
           if [ -z "$arn" ]; then
             arn=$(aws ecs create-express-gateway-service \
               --cluster "$CLUSTER" --service-name "$SERVICE" \
@@ -191,8 +190,14 @@ jobs:
         run: |
           # ECS replaces the task only after the new one passes the load balancer's /ready check.
           for i in $(seq 1 60); do
-            read -r rollout td <<<"$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
-              --query "services[0].deployments[?status=='PRIMARY'] | [0].[rolloutState, taskDefinition]" --output text)"
+            read -r id rollout td <<<"$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+              --query "services[0].deployments[?status=='PRIMARY'] | [0].[id, rolloutState, taskDefinition]" --output text)"
+            if [ -n "$PREV_DEPLOYMENT" ] && [ "$id" = "$PREV_DEPLOYMENT" ] && [ "$rollout" != "COMPLETED" ]; then
+              # The previous deployment is still the primary one: the update has not started its own yet.
+              echo "attempt $i: waiting for the new deployment to start (the previous one is $rollout)"
+              [ "$i" -lt 12 ] || { echo "::error::the update did not start a new deployment"; exit 1; }
+              sleep 15; continue
+            fi
             running=$(aws ecs describe-task-definition --task-definition "$td" \
               --query "taskDefinition.containerDefinitions[0].image" --output text)
             echo "attempt $i: rollout=$rollout image=${running##*/}"
@@ -204,6 +209,46 @@ jobs:
           aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
             --query "services[0].events[:10].message" --output text | sed 's/[0-9]\{12\}/***/g'
           exit 1
+      - name: why it failed
+        if: ${{ failure() && (inputs.action || 'deploy') != 'delete' }}
+        run: |
+          # Evidence for the next fix: what Express Mode provisioned, which service-linked roles exist,
+          # whether there is a default VPC, and every call AWS refused recently (CloudTrail event history;
+          # IAM calls are recorded in us-east-1, which a region policy may hide).
+          mask() { sed 's/[0-9]\{12\}/***/g'; }
+          echo "## service"
+          aws ecs describe-express-gateway-service --service-arn "$SERVICE_ARN" --output json 2>&1 | mask | head -c 6000; echo
+          echo "## service-linked roles"
+          for r in AWSServiceRoleForECS AWSServiceRoleForElasticLoadBalancing AWSServiceRoleForApplicationAutoScaling_ECSService; do
+            if aws iam get-role --role-name "$r" >/dev/null 2>&1; then echo "$r exists"; else echo "$r MISSING"; fi
+          done
+          echo "## default VPC: $(aws ec2 describe-vpcs --filters Name=is-default,Values=true --query 'Vpcs[].VpcId' --output text 2>&1 | mask)"
+          echo "## load balancers"
+          aws elbv2 describe-load-balancers --query "LoadBalancers[].[LoadBalancerName,State.Code]" --output text 2>&1 | mask
+          cat > "$RUNNER_TEMP/denied.py" <<'PY'
+          import json, sys
+          raw = sys.stdin.read()
+          try:
+              events = json.loads(raw)
+          except Exception:
+              print(raw[:800]); sys.exit(0)
+          n = 0
+          for e in events:
+              e = json.loads(e)
+              if "errorCode" not in e:
+                  continue
+              n += 1
+              ident = e.get("userIdentity", {})
+              who = ident.get("sessionContext", {}).get("sessionIssuer", {}).get("userName") or ident.get("userName") or ident.get("type")
+              print(e["eventTime"], e["eventSource"], e["eventName"], "by", who, "->", e["errorCode"], (e.get("errorMessage") or "")[:300])
+          print(n, "refused calls")
+          PY
+          since=$(date -u -d '-45 minutes' +%FT%TZ)
+          for region in "$AWS_REGION" us-east-1; do
+            echo "## refused calls since $since in $region"
+            aws --region "$region" cloudtrail lookup-events --start-time "$since" --max-items 500 \
+              --query "Events[].CloudTrailEvent" --output json 2>&1 | mask | python3 "$RUNNER_TEMP/denied.py"
+          done
       - name: public address answers
         id: url
         if: ${{ (inputs.action || 'deploy') != 'delete' }}
