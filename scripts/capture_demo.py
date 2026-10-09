@@ -122,6 +122,10 @@ def main() -> None:
             "() => fetch('/v1/candidates').then(r => r.json()).then(d => d.jobs.at(-1))"
         )
         report["gate"] = page.inner_text("#cand-status")
+        # the gate's own record: decision time, evaluation window, sample size, both MAEs, reason
+        report["gate_decision"] = page.evaluate(
+            "() => fetch('/v1/candidates').then(r => r.json()).then(d => (d.jobs.at(-1) || {}).gate)"
+        )
 
         # 3 · deploy: versions, activate/rollback buttons, forecast call
         page.click(".step[data-panel=deploy]")
@@ -145,7 +149,7 @@ def main() -> None:
             page.click("#btn-step1")
             page.wait_for_timeout(250)
             events = page.evaluate("() => fetch('/v1/events').then(r => r.json())")
-            if any(s["to"] != before and s["reason"] in ("worker", "gate") for s in events["swaps"]):
+            if any(s["to"] != before and s["reason"] == "gate" for s in events["swaps"]):
                 report["swap"] = events["swaps"][-1]
                 report["steps_to_swap"] = step + 1
                 swapped = True
@@ -156,6 +160,9 @@ def main() -> None:
         page.wait_for_timeout(3500)
         shot(page, out, "04-monitor.png")
         report["swapped"] = swapped
+        report["decisions"] = page.evaluate(
+            "() => fetch('/v1/events').then(r => r.json()).then(d => d.decisions)"
+        )
         report["monitor"] = page.evaluate(
             "() => fetch('/v1/monitor').then(r => r.json()).then(m => ({active: m.active_version, rolling: m.rolling_7d_mae, alarms: m.alarms.length, resolved: m.resolved_forecasts}))"
         )

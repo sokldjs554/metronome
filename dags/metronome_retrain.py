@@ -1,17 +1,19 @@
 """Weekly retraining with a promotion gate, as an Airflow DAG.
 
-The offline experiment (docs/results.md) found that on ETTh1 a weekly retrain that only promotes the
-candidate when it beats the champion (periodic-7+gate) cut swaps from 52 to 16 while lowering MAE.
-This DAG runs that policy against the live service:
+The offline experiment (docs/results.md) compares a weekly retrain that only promotes the
+candidate when it beats the champion (periodic-7+gate) with the un-gated schedules. This DAG runs
+that policy against the live service:
 
-    champion_state -> train_candidate -> gate -> activate | keep
+    champion_state -> train_candidate -> gate -> promoted | keep
 
-* champion_state reads the serving API: which version is active and how it did over the last days.
+* champion_state reads the serving API: which version is active and where the replayed stream is.
 * train_candidate writes a retrain job into the shared registry and runs the worker once with
   activation turned off, so the candidate is exported, parity-checked and registered but not serving.
-* gate compares the candidate's validation MAE (fixed scale, last val_days) with the champion's
-  rolling MAE over the same scale; the candidate is promoted only when it is lower.
-* activate asks the API to switch; the API re-verifies hash and reference I/O before swapping.
+* gate asks the API to promote the candidate (POST /v1/candidates/promote). The API re-verifies
+  hashes and reference I/O, then scores candidate and champion on the same resolved windows
+  before the candidate's training cutoff (serving/gate.py) and swaps only a strictly better one.
+  The DAG names the champion it saw, so a decision is never applied against a different live model.
+* promoted checks the service really serves the candidate; keep logs why it stayed registered only.
 
 Configuration (Airflow Variables or environment, in that order): METRONOME_API_URL, METRONOME_REGISTRY,
 METRONOME_API_KEY, METRONOME_MAX_EPOCHS. The worker needs PyTorch, so run Airflow where
@@ -130,42 +132,34 @@ def metronome_weekly_retrain() -> None:
 
     @task.branch
     def gate(state: dict[str, Any], candidate: dict[str, Any]) -> str:
-        champion_mae = state["rolling_7d_mae"]
-        source = "rolling_7d_mae"
-        if champion_mae is None:
-            champion_mae = state["baseline_val_mae"]
-            source = "baseline_val_mae (no resolved forecasts yet)"
-        decision = {
-            "champion": state["champion"],
-            "champion_mae": champion_mae,
-            "champion_mae_source": source,
-            "candidate": candidate["version"],
-            "candidate_val_mae": candidate["val_mae_fixed"],
-            "promote": champion_mae is not None and candidate["val_mae_fixed"] < champion_mae,
-        }
+        import httpx
+
+        resp = httpx.post(
+            f"{state['api_url']}/v1/candidates/promote",
+            json={"version": candidate["version"], "reason": "airflow-weekly", "champion": state["champion"]},
+            headers=api_headers(),
+            timeout=300,
+        )
+        if resp.status_code not in (200, 409):
+            resp.raise_for_status()
+        decision = resp.json()
+        if "decision" not in decision:  # 409 without a record: champion changed or already active
+            raise RuntimeError(f"promotion refused: {decision}")
         LOGGER.info("gate: %s", json.dumps(decision))
         Path(setting("METRONOME_GATE_LOG", "/tmp/metronome-gate.json")).write_text(
             json.dumps(decision, indent=2)
         )
-        return "activate" if decision["promote"] else "keep"
+        return "promoted" if decision["applied"] else "keep"
 
     @task
-    def activate(state: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+    def promoted(state: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
         import httpx
 
-        base = state["api_url"]
-        resp = httpx.post(
-            f"{base}/v1/models/{candidate['version']}/activate",
-            params={"reason": "airflow-gate"},
-            headers=api_headers(),
-            timeout=120,
-        )
-        resp.raise_for_status()
-        ready = httpx.get(f"{base}/ready", timeout=30).json()
+        ready = httpx.get(f"{state['api_url']}/ready", timeout=30).json()
         if ready.get("model") != candidate["version"]:
-            raise RuntimeError(f"activation did not take: {ready}")
-        LOGGER.info("promoted %s -> %s: %s", state["champion"], candidate["version"], resp.json())
-        return resp.json()
+            raise RuntimeError(f"promotion did not take: {ready}")
+        LOGGER.info("promoted %s -> %s", state["champion"], candidate["version"])
+        return ready
 
     @task
     def keep(state: dict[str, Any], candidate: dict[str, Any]) -> None:
@@ -176,7 +170,7 @@ def metronome_weekly_retrain() -> None:
     s = champion_state()
     c = train_candidate(s)
     g = gate(s, c)
-    g >> [activate(s, c), keep(s, c)]
+    g >> [promoted(s, c), keep(s, c)]
 
 
 metronome_weekly_retrain()

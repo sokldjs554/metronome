@@ -95,6 +95,19 @@ def init_deployment(
         registry_root / "work" / "initial",
     )
     report = registry.activate(version)
+    registry.record_gate(
+        version,
+        {
+            "candidate": version,
+            "champion": None,
+            "decision": "initial",
+            "reason": "no_champion",
+            "decided_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "via": "deploy-init",
+            "applied": True,
+            "activation": report,
+        },
+    )
     return {
         "registry": str(registry_root),
         "stream": str(stream_path),

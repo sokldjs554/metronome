@@ -59,7 +59,7 @@ ETTh1 에서도 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth1
 2017년 여름의 이상 구간 한가운데서 울려 그 구간에 맞춘 모델을 배포하고, 그 모델의 높은 검증 MAE 가 새 기준선이 되어 다시는 울리지 않습니다.
 ADWIN 은 δ=0.01 에서 거의 울리지 않아(일 단위 표본 수십 개로는 Hoeffding 경계가 너무 보수적) 사실상 never 와 같습니다.
 
-**승격 게이트는 해로운 교체를 걸러 내지만 공짜는 아닙니다.** 같은 일정에서 후보가 직전 14일의 현역보다 낫지 않으면 교체하지 않는 `+gate` 는
+**승격 게이트는 해로운 교체를 걸러 내지만 공짜는 아닙니다.** 같은 일정에서 후보가 자기 검증 구간 중 결정 시점에 완결된 날들(직전 14일 중 10일)에서 현역보다 낫지 않으면 교체하지 않는 `+gate` 는
 ETTh1 periodic-7 의 교체를 52회에서 <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/periodic-7+gate/n_refits_mean:.0f -->16<!-- /num -->회로 줄이면서 MAE 는 <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/periodic-7/mae_mean:.4f -->0.4700<!-- /num --> 에서 <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/periodic-7+gate/mae_mean:.4f -->0.4690<!-- /num --> 로 오히려 낮아지고,
 이상 구간에서 울려 해로웠던 ratio-0.2 의 손해를 크게 덜어 냅니다(ETTh1 <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/ratio-0.2/mae_mean:.4f -->0.4914<!-- /num --> → <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/ratio-0.2+gate/mae_mean:.4f -->0.4782<!-- /num -->,
 weather <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/ratio-0.2/mae_mean:.4f -->0.4364<!-- /num --> → <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/ratio-0.2+gate/mae_mean:.4f -->0.4307<!-- /num -->).
@@ -141,7 +141,7 @@ ph-0.1 의 MAE 를 <!-- num:artifacts/cadence_summary_extended.json#datasets/ett
 
 ## 사후 탐색: 승격 게이트 (+gate)
 
-프로토콜 밖에서 추가한 변형입니다(변경 이력 참고). 후보의 검증 MAE 가 직전 14일 현역 실측 MAE 보다 낮을 때만 교체합니다.
+프로토콜 밖에서 추가한 변형입니다(변경 이력 참고). 재학습 날 D 에 후보와 현역을 **후보의 검증 구간(D−14..D−1) 중 D 00:00 에 모든 예측이 완결된 날(D−14..D−5, 10일 240 origin)** 에서 같은 캐시 배열·같은 고정 척도로 비교해, 후보의 MAE 가 더 낮을 때만 교체합니다. 표본이 모자라거나(스트림 시작 뒤 14일 전) 동률이면 현역을 유지합니다. 이 날들은 후보의 조기 종료에 쓰인 검증 구간이라 비교는 후보에게 조금 유리합니다. 2026-10-09 정정 전에는 후보의 검증 MAE(241 origin)를 현역의 직전 14일 MAE(336 origin, 마지막 4일은 결정 뒤 도착하는 정답 포함)와 비교했습니다(변경 이력 참고). 아래 표는 정정 후 수치이고, 정정 전후 비교는 그 아래에 있습니다.
 
 | 데이터셋 | periodic-7 → +gate | periodic-1 → +gate | ratio-0.2 → +gate | ph-0.1 → +gate |
 |---|---|---|---|---|
@@ -163,8 +163,10 @@ ph-0.1 의 MAE 를 <!-- num:artifacts/cadence_summary_extended.json#datasets/ett
 
 ```bash
 metronome prepare etth1 etth2 weather electricity20
-bash scripts/run_cache_all.sh        # 4 vCPU 기준 수 시간
+bash scripts/run_cache_all.sh        # 4 vCPU 기준 수 시간; 모델마다 자기 앞 14일(검증 구간)도 평가해 둔다(게이트용)
 bash scripts/run_warm_all.sh
+# 옛 캐시(앞 창 없음)를 바꿔 끼울 때: OUT=artifacts/cache_v2 bash scripts/run_cache_regen.sh 뒤
+# python scripts/compare_caches.py artifacts/cache artifacts/cache_v2  (앞쪽 오차·가중치 해시가 같은지 확인)
 metronome simulate $(ls artifacts/cache/*.npz | grep -v _warm | xargs -n1 basename | sed 's/.npz//')
 metronome report
 python scripts/check_numbers.py --fix docs/results.md README.md

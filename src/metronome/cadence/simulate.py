@@ -27,16 +27,17 @@ import numpy as np
 
 from metronome.drift.detectors import make_detector
 from metronome.eval.bootstrap import paired_block_bootstrap
+from metronome.eval.resolve import resolve_lag_days
 
-
-def resolve_lag_days(horizon: int, per_day: int) -> int:
-    """Days between a decision at 00:00 of day D and the latest day whose every forecast is resolved.
-
-    The last origin of day d is row (d+1)*per_day - 1 and its last target is `horizon` - 1 rows
-    later; it is resolved at D 00:00 when that row is before row D*per_day, i.e. when
-    d <= D - 1 - ceil((horizon - 1) / per_day). Hourly data with H=96: 5 (days D-5 and earlier).
-    """
-    return 1 + -(-(horizon - 1) // per_day)
+__all__ = [
+    "Cache",
+    "GateDecision",
+    "gate_decide",
+    "resolve_lag_days",
+    "resolved_days",
+    "run_policies",
+    "simulate_cache",
+]
 
 
 @dataclass

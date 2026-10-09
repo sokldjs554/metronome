@@ -190,6 +190,23 @@ class Registry:
             raise VerificationError(f"{version}: output does not match deployment horizon/channels")
         return {"version": version, "max_abs_diff": diff, "onnx_sha256": manifest["onnx_sha256"]}
 
+    # ---- gate records -------------------------------------------------------------------------
+    def record_gate(self, version: str, record: dict[str, Any]) -> None:
+        """Keep every promotion decision about a version: the latest in gate.json, all in a log."""
+        vdir = self.versions_dir / version
+        if not (vdir / "manifest.json").exists():
+            raise RegistryError(f"unknown version {version}")
+        _atomic_write(vdir / "gate.json", json.dumps(record, indent=2))
+        with (vdir / "gate_history.jsonl").open("a") as fh:
+            fh.write(json.dumps(record) + "\n")
+
+    def gate_record(self, version: str) -> dict[str, Any] | None:
+        path = self.versions_dir / version / "gate.json"
+        if not path.exists():
+            return None
+        record: dict[str, Any] = json.loads(path.read_text())
+        return record
+
     # ---- activation ---------------------------------------------------------------------------
     def active(self) -> str | None:
         path = self.root / "ACTIVE"

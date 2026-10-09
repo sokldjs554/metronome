@@ -14,6 +14,8 @@ PALETTE = {
     "warm": "#5c7a29",
 }
 LABELLED = {"never", "periodic-1", "periodic-7", "periodic-30", "periodic-90", "warm-1"}
+# The three points every comparison in the docs comes back to, named in words next to the marker.
+CALLOUTS = {"never": "재학습 없음", "periodic-1": "매일 재학습", "ph-0.1": "Page–Hinkley (ph-0.1)"}
 FONT = "font-family='system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif'"
 
 
@@ -88,14 +90,16 @@ def pareto_chart(
     width, height, pad = 520, 360, (46, 16, 36, 60)
     top, right, bottom, left = pad
     xs = [p.x for p in points]
-    ys = (
-        [p.y for p in points]
-        + [p.y_lo for p in points if p.y_lo is not None]
-        + [p.y_hi for p in points if p.y_hi is not None]
-    )
+    means = [p.y for p in points]
+    bars = [v for p in points for v in (p.y_lo, p.y_hi) if v is not None]
     xd = (0.0, max(xs) * 1.05 or 1.0)
-    span = max(max(ys) - min(ys), 1e-6)
-    yd = (min(ys) - span * 0.12, max(ys) + span * 0.12)
+    # The axis follows the seed means; min-max bars may extend it by at most one more span, so a
+    # single runaway seed (ETTh1 ratio-0.2) cannot squash every other policy into a line. Bars
+    # that reach further are clipped at the edge.
+    span = max(max(means) - min(means), 1e-6)
+    lo = max(min(bars + means), min(means) - span) if bars else min(means)
+    hi = min(max(bars + means), max(means) + span) if bars else max(means)
+    yd = (lo - span * 0.12, hi + span * 0.12)
     x = _scale(xd[0], xd[1], left, width - right)
     y = _scale(yd[0], yd[1], height - bottom, top)
     parts = _frame(width, height, pad, title, xlab, ylab)
@@ -103,8 +107,9 @@ def pareto_chart(
     for p in points:
         color = PALETTE.get(p.kind, "#1d2320")
         if p.y_lo is not None and p.y_hi is not None:
+            y_lo, y_hi = max(p.y_lo, yd[0]), min(p.y_hi, yd[1])
             parts.append(
-                f"<line x1='{x(p.x):.1f}' x2='{x(p.x):.1f}' y1='{y(p.y_lo):.1f}' y2='{y(p.y_hi):.1f}' stroke='{color}' stroke-width='1.2' opacity='.6'/>"
+                f"<line x1='{x(p.x):.1f}' x2='{x(p.x):.1f}' y1='{y(y_lo):.1f}' y2='{y(y_hi):.1f}' stroke='{color}' stroke-width='1.2' opacity='.6'/>"
             )
         if p.kind == "periodic" or p.kind == "never":
             parts.append(
@@ -114,10 +119,36 @@ def pareto_chart(
             parts.append(
                 f"<rect x='{x(p.x) - 4:.1f}' y='{y(p.y) - 4:.1f}' width='8' height='8' fill='{color}'><title>{_esc(p.label)}</title></rect>"
             )
-        if p.label in LABELLED and not p.hollow:
+        if p.label in LABELLED and p.label not in CALLOUTS and not p.hollow:
             parts.append(
                 f"<text x='{x(p.x) + 6:.1f}' y='{y(p.y) - 6:.1f}' font-size='10' fill='{color}'>{_esc(p.label)}</text>"
             )
+    # callouts: a short leader line from the marker to a boxed Korean name, to the right of the
+    # marker unless that runs past the plot, stacked upwards so two callouts never overlap
+    used: list[float] = []
+    for p in sorted((p for p in points if p.label in CALLOUTS and not p.hollow), key=lambda q: -q.y):
+        color = PALETTE.get(p.kind, "#1d2320")
+        text = CALLOUTS[p.label]
+        w = sum(11.5 if ord(ch) > 0x2E7F else 6.3 for ch in text) + 16
+        px, py = x(p.x), y(p.y)
+        tx = px + 16 if px + 16 + w <= width - right else px - 16 - w
+        # the box goes on the side of the marker with more room (never off the plot)
+        below = (height - bottom - py) > (py - top) and py + 14 + 18 <= height - bottom
+        ty = py + 14 if below else py - 30
+        while any(abs(ty - u) < 20 for u in used):
+            ty = ty + 20 if below else ty - 20
+        ty = min(max(ty, top + 2), height - bottom - 20)
+        used.append(ty)
+        ax = tx if tx > px else tx + w
+        parts.append(
+            f"<line x1='{px:.1f}' y1='{py:.1f}' x2='{ax:.1f}' y2='{ty + 9:.1f}' stroke='{color}' stroke-width='1'/>"
+        )
+        parts.append(
+            f"<rect x='{tx:.1f}' y='{ty:.1f}' width='{w:.1f}' height='18' rx='3' fill='white' stroke='{color}' stroke-width='1'/>"
+        )
+        parts.append(
+            f"<text x='{tx + 8:.1f}' y='{ty + 13:.1f}' font-size='11' font-weight='700' fill='{color}'>{_esc(text)}</text>"
+        )
     lx = left
     for kind, color in PALETTE.items():
         if any(p.kind == kind for p in points):

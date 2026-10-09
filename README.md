@@ -38,7 +38,7 @@
 
 ## 2. 핵심 결과
 
-**재학습 효과는 데이터마다 다르고, 배포 전에 잴 수 있습니다.** DLinear 를 4개 데이터셋의 마지막 1년에서 매일 콜드 재학습한 캐시 위에 정책 20개를 시뮬레이션했습니다(시드 3개, 초기 학습 구간 표준편차 단위 MAE). 수치는 저장소의 JSON 에서 읽어 CI 가 대조합니다.
+**재학습 효과는 데이터마다 다르고, 배포 전에 잴 수 있습니다.** DLinear 를 4개 데이터셋의 마지막 1년(weather 는 180일)에서 매일 콜드 재학습한 캐시 위에 정책 20개를 시뮬레이션했습니다(시드 3개, 초기 학습 구간 표준편차 단위 MAE). 수치는 저장소의 JSON 에서 읽어 CI 가 대조합니다.
 
 | 데이터셋 | 매일 재학습 vs 안 함 (MAE 개선율) | 읽는 법 |
 |---|---:|---|
@@ -48,7 +48,7 @@
 | Electricity (20) | <!-- num:artifacts/cadence_summary.json#datasets/electricity20/expanding/policies/periodic-1/improvement_vs_never_pct:+.2f -->-0.15<!-- /num -->% | 신뢰구간이 0 을 포함: 효과 없음 |
 
 - 재학습이 통하는 ETTh2 에서는 오차 감시(Page–Hinkley)가 재학습 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/n_refits:.0f -->19<!-- /num -->회로 매일 재학습 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->0.98<!-- /num -->배를 얻습니다.
-- **승격 게이트**(후보가 직전 14일의 현역보다 나을 때만 교체)는 이상 구간에서 학습된 나쁜 모델이 서비스에 오르는 것을 막습니다. 이상 구간에서 울리는 비율 규칙은 ETTh1 에서 오히려 해로웠습니다(<!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/ratio-0.2/improvement_vs_never_pct:+.1f -->-2.6<!-- /num -->%).
+- **승격 게이트**(후보와 현역을 후보 검증 구간 중 정답이 다 도착한 날들에서 같은 표본으로 비교해 후보가 나을 때만 교체)는 이상 구간에서 학습된 나쁜 모델이 서비스에 오르는 것을 막습니다. 이상 구간에서 울리는 비율 규칙은 ETTh1 에서 오히려 해로웠습니다(<!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/ratio-0.2/improvement_vs_never_pct:+.1f -->-2.6<!-- /num -->%).
 - 사전 가설 H1~H4 중 둘(H1 재학습은 늘 도움이 된다, H3 웜 스타트는 비용 1/3)은 기각됐고 그대로 적었습니다. 전체 격자·신뢰구간·차트는 [docs/results.md](docs/results.md).
 
 ![etth2 재학습 횟수 대 MAE](docs/assets/charts/pareto_etth2.svg)
@@ -60,7 +60,7 @@
 | 단계 | 화면에서 하는 일 |
 |---|---|
 | 1 · [데이터](docs/assets/demo/01-data.png) | 배포된 데이터의 출처(URL·SHA-256)와 검사 결과를 보고, **내 CSV 를 올려** 같은 검사(중복·역행·간격·결측·상수 채널)를 돌립니다 |
-| 2 · [모델 비교](docs/assets/demo/02-models.png) | naive → Linear → DLinear → PatchTST 를 같은 분할에서 비교하고, 계열을 골라 **후보를 학습**합니다. 게이트는 후보의 검증 MAE 가 현재 모델보다 낮을 때만 승격합니다 |
+| 2 · [모델 비교](docs/assets/demo/02-models.png) | naive → Linear → DLinear → PatchTST 를 같은 분할에서 비교하고, 계열을 골라 **후보를 학습**합니다. 승격은 무결성 검사 뒤 후보와 현재 모델을 같은 완결 구간에서 비교해 후보가 더 낮을 때만 합니다 |
 | 3 · [배포](docs/assets/demo/03-deploy.png) | 버전 표에서 **한 번 눌러 활성화·롤백**, 모델 카드(학습 구간·지표·해시·입출력 계약), 지금 시점의 예측을 실제값과 겹쳐 보기 |
 | 4 · [감시 · 재학습](docs/assets/demo/04-monitor.png) | ETTh1 의 마지막 1년을 시간순으로 재생합니다. 검출기가 울리면 worker 가 재학습하고, API 는 해시·참조 입출력을 **검증한 뒤 포인터만 바꿉니다**. 교체 중 실패하는 요청은 0건(테스트로 고정) |
 | 5 · [재학습 정책](docs/assets/demo/05-policy.png) | 이 데이터에 맞는 정책(2절의 오프라인 실험)을 보고, 그 정책으로 재생을 시작합니다 |
@@ -109,11 +109,14 @@ flowchart LR
 
 - **승격 게이트(서비스)**: 후보가 서비스에 오르려면 아래를 모두 통과해야 합니다([docs/serving.md](docs/serving.md)).
 
-| 검사 | 기준 | 실패 시 |
-|---|---|---|
-| 검증 MAE | 후보 < 현역의 최근 7일 MAE(없으면 배포 시 검증 MAE) | 등록만 하고 승격하지 않음(강제 승격은 명시적 옵션) |
-| ONNX parity | PyTorch 출력과 최대 절대 차이 ≤ 1e-4 | 등록 거부 |
-| 해시 · 참조 입출력 | 활성화 때 다시 계산해 매니페스트와 일치 | 422 로 거부, 현재 모델이 계속 응답 |
+| 순서 | 검사 | 기준 | 실패 시 |
+|---|---|---|---|
+| 등록 | ONNX parity | PyTorch 출력과 최대 절대 차이 ≤ 1e-4 | 등록 거부 |
+| 승격 1 | 무결성 | 해시·참조 입출력을 다시 계산해 매니페스트와 일치 | 422 로 거부, `refused` 로 기록, 현재 모델이 계속 응답 |
+| 승격 2 | 성능 게이트 | 후보와 현재 모델을 **후보의 학습 마감 전 14일 중 정답이 모두 도착한 날들의 같은 origin**(시간 단위·H=96 이면 10일 240개)에서 고정 척도로 비교해 후보가 더 낮을 때만 | 등록만 남기고 현재 모델 유지. 동률·표본 부족·비유한값은 보류. 결정 시각·평가 구간·표본 수·두 버전·두 MAE·사유를 `gate.json` 에 기록 |
+| 예외 | 초기 배포 · 롤백 · 관리자 수동 활성화 · 강제 승격 | 무결성만 검사 | 각각 `initial`·`rollback`·`manual`·`forced` 로 기록되어 게이트 통과로 보이지 않음 |
+
+감시 경보·주기 재학습(worker)·Airflow DAG·대시보드의 후보 학습 모두 같은 `POST /v1/candidates/promote` 를 거칩니다. 오프라인 실험의 `+gate` 와 같은 시간 경계·표본·척도·기준입니다.
 
 - **서빙 성능** (DLinear, 4 vCPU): 모델 호출 p95 가 PyTorch <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/torch/p95_ms:.3f -->0.339<!-- /num --> ms → ONNX Runtime <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/ort_fp32/p95_ms:.3f -->0.118<!-- /num --> ms(배치 1). HTTP 왕복 p50 <!-- num:artifacts/serving/http_latency.json#http_ms/p50:.2f -->4.43<!-- /num --> ms · p95 <!-- num:artifacts/serving/http_latency.json#http_ms/p95:.2f -->5.87<!-- /num --> ms(loopback), 동시 클라이언트 8 에서 <!-- num:artifacts/serving/http_load.json#levels/8/requests_per_s:.0f -->304<!-- /num --> req/s. 자세한 표는 [docs/serving.md](docs/serving.md).
 - **테스트 · CI**: pytest 99개(교체 중 요청 손실 0, 검증 실패 시 거부, CSV 검사, 후보 게이트, 롤백, 검출기·캐시·전처리 회귀), 커버리지 하한 70%, Python 3.11–3.13. CI 12개 잡이 lint · 테스트 · 파이프라인 smoke · Docker · compose 와 kind 의 재학습 루프 · Airflow DAG · 데모 이미지 · TensorFlow 교차 재현 · 문서 숫자 대조를 실행합니다.
@@ -133,7 +136,7 @@ flowchart LR
 
 | 문제 | 원인 | 해결 | 교훈 |
 |---|---|---|---|
-| 이상 구간에서 검출기가 울려 재학습한 모델이 오히려 나빠짐(ETTh1 비율 규칙 <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/ratio-0.2/improvement_vs_never_pct:+.1f -->-2.6<!-- /num -->%) | 이상 구간 데이터로 학습한 후보를 검증 없이 교체 | 후보가 직전 14일의 현역보다 나을 때만 교체하는 **승격 게이트** 추가. 첫 결과를 본 뒤 넣었으므로 사후 탐색으로 표시 | 재학습 "트리거"와 "승격"은 다른 결정 |
+| 이상 구간에서 검출기가 울려 재학습한 모델이 오히려 나빠짐(ETTh1 비율 규칙 <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/ratio-0.2/improvement_vs_never_pct:+.1f -->-2.6<!-- /num -->%) | 이상 구간 데이터로 학습한 후보를 검증 없이 교체 | 후보와 현역을 같은 완결 구간에서 비교해 후보가 나을 때만 교체하는 **승격 게이트** 추가. 첫 결과를 본 뒤 넣었으므로 사후 탐색으로 표시. 외부 리뷰 뒤 비교 표본이 달랐던 것(현역 쪽이 결정 뒤 도착할 정답까지 읽음)을 바로잡고 캐시를 재생성 | 재학습 "트리거"와 "승격"은 다른 결정 |
 | compose 에서 재학습 요청이 기록되지 않음 | API 컨테이너가 레지스트리를 읽기 전용으로 마운트, 두 이미지의 uid 불일치. 로컬 프로세스로는 재현 안 됨 | CI `compose` 잡이 실제 컨테이너 두 개로 루프를 돌리다 Read-only file system 으로 드러남 → uid 통일, 볼륨 쓰기 가능 | 컨테이너 경계는 실제 컨테이너로 CI 에서 돌려야 보임 |
 | H2 통계가 시드별 비율 평균의 폭주로 깨짐 | 이득이 0 근처인 데이터셋에서 비율의 분모가 0 에 가까움 | 시드 평균 MAE 의 비율로 정의를 바꾸고, 이득이 확인된 데이터셋에서만 계산. 판정은 그대로, 변경 이력에 날짜·이유 기록 | 비율 통계는 분모를 먼저 의심 |
 | Terraform 원격 상태 저장소 생성이 `SubscriptionNotFound` | 배포용 ID 가 리소스 그룹 범위라 Storage 공급자를 등록할 수 없음 | 원격 상태 대신 매 실행마다 실제 리소스를 import 하고 plan 변경 0건을 검사 | 최소 권한 ID 는 IaC 의 상태 저장 방식까지 정함 |
