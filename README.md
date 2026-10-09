@@ -34,7 +34,7 @@
 | 문제 | 배포한 모델을 "언제 다시 학습할지"는 보통 감으로 정합니다. 너무 자주 하면 비용이, 너무 드물면 오차가 쌓입니다 |
 | 접근 | 매일 콜드 재학습한 모델을 **캐시**로 만들어 두고 그 위에서 정책 20개를 시뮬레이션합니다. 가설과 판정 기준은 실행 전에 커밋([프로토콜](docs/protocol.md)) |
 | 데이터 | 공개 벤치마크 4개(ETTh1 · ETTh2 · Jena weather · UCI electricity 20채널)를 시간순으로 재생. 대용량 처리는 M4 <!-- num:artifacts/bigdata/bigdata.json#engines/0/n_series:, -->100,000<!-- /num --> 시계열 |
-| 현재 상태 | Azure Container Apps · AWS ECS(Fargate) · Render 에 배포, 6시간마다 자동 점검, CI 12개 잡 통과, 테스트 99개 |
+| 현재 상태 | Azure Container Apps · AWS ECS(Fargate) · Render 에 배포, 6시간마다 자동 점검, CI 12개 잡 통과, 테스트 110개 |
 
 ## 2. 핵심 결과
 
@@ -119,7 +119,7 @@ flowchart LR
 감시 경보·주기 재학습(worker)·Airflow DAG·대시보드의 후보 학습 모두 같은 `POST /v1/candidates/promote` 를 거칩니다. 오프라인 실험의 `+gate` 와 같은 시간 경계·표본·척도·기준입니다.
 
 - **서빙 성능** (DLinear, 4 vCPU): 모델 호출 p95 가 PyTorch <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/torch/p95_ms:.3f -->0.339<!-- /num --> ms → ONNX Runtime <!-- num:artifacts/optimization/benchmark_dlinear.json#batches/1/ort_fp32/p95_ms:.3f -->0.118<!-- /num --> ms(배치 1). HTTP 왕복 p50 <!-- num:artifacts/serving/http_latency.json#http_ms/p50:.2f -->4.43<!-- /num --> ms · p95 <!-- num:artifacts/serving/http_latency.json#http_ms/p95:.2f -->5.87<!-- /num --> ms(loopback), 동시 클라이언트 8 에서 <!-- num:artifacts/serving/http_load.json#levels/8/requests_per_s:.0f -->304<!-- /num --> req/s. 자세한 표는 [docs/serving.md](docs/serving.md).
-- **테스트 · CI**: pytest 99개(교체 중 요청 손실 0, 검증 실패 시 거부, CSV 검사, 후보 게이트, 롤백, 검출기·캐시·전처리 회귀), 커버리지 하한 70%, Python 3.11–3.13. CI 12개 잡이 lint · 테스트 · 파이프라인 smoke · Docker · compose 와 kind 의 재학습 루프 · Airflow DAG · 데모 이미지 · TensorFlow 교차 재현 · 문서 숫자 대조를 실행합니다.
+- **테스트 · CI**: pytest 110개(교체 중 요청 손실 0, 검증 실패 시 거부, CSV 검사, 후보 게이트, 롤백, 검출기·캐시·전처리 회귀), 커버리지 하한 70%, Python 3.11–3.13. CI 12개 잡이 lint · 테스트 · 파이프라인 smoke · Docker · compose 와 kind 의 재학습 루프 · Airflow DAG · 데모 이미지 · TensorFlow 교차 재현 · 문서 숫자 대조를 실행합니다.
 
 ## 6. 운영
 
