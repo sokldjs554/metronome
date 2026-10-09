@@ -27,7 +27,7 @@
 
 </div>
 
-**결론 한 줄** — 다시 가르쳐서 좋아지는 데이터(ETTh2)에서는, 틀리기 시작할 때만 다시 가르쳐도(1년에 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/n_refits:.0f -->19<!-- /num -->번) 매일 다시 가르치는 것(364번)이 주는 정확도 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->0.98<!-- /num -->배를 얻습니다. 다시 가르쳐도 소용없는 데이터(weather · electricity)는 서비스에 올리기 전에 미리 알 수 있습니다. 이 결론대로 움직이는 서비스가 지금 Azure 와 AWS 에서 돌고 있습니다.
+**결론 한 줄** — 다시 가르쳐서 좋아지는 데이터(ETTh2)에서는, 틀리기 시작할 때만 다시 가르쳐도(1년에 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/n_refits:.0f -->20<!-- /num -->번) 매일 다시 가르치는 것(364번)이 주는 정확도 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->1.01<!-- /num -->배를 얻습니다. 다시 가르쳐도 소용없는 데이터(weather · electricity)는 서비스에 올리기 전에 미리 알 수 있습니다. 이 결론대로 움직이는 서비스가 지금 Azure 와 AWS 에서 돌고 있습니다.
 
 ![Metronome 데모 — 데이터 검사, 모델 계열 비교와 게이트, 원클릭 배포, 오차 감시와 무중단 교체, 재학습 정책](docs/assets/demo/demo.gif)
 
@@ -55,8 +55,8 @@
 | Weather | <!-- num:artifacts/cadence_summary.json#datasets/weather/expanding/policies/periodic-1/improvement_vs_never_pct:+.2f -->+0.58<!-- /num -->% | 신뢰구간이 0 을 포함: 효과 없음 |
 | Electricity (20) | <!-- num:artifacts/cadence_summary.json#datasets/electricity20/expanding/policies/periodic-1/improvement_vs_never_pct:+.2f -->-0.15<!-- /num -->% | 신뢰구간이 0 을 포함: 효과 없음 |
 
-- 재학습이 통하는 ETTh2 에서는 오차 감시(Page–Hinkley)가 재학습 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/n_refits:.0f -->19<!-- /num -->회로 매일 재학습 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->0.98<!-- /num -->배를 얻습니다.
-- **승격 게이트**(후보와 현역을 후보 검증 구간 중 정답이 다 도착한 날들에서 같은 표본으로 비교해 후보가 나을 때만 교체)는 이상 구간에서 학습된 나쁜 모델이 서비스에 오르는 것을 막습니다. 이상 구간에서 울리는 비율 규칙은 ETTh1 에서 오히려 해로웠습니다(<!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/ratio-0.2/improvement_vs_never_pct:+.1f -->-2.6<!-- /num -->%).
+- 재학습이 통하는 ETTh2 에서는 오차 감시(Page–Hinkley)가 재학습 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/n_refits:.0f -->20<!-- /num -->회로 매일 재학습 이득의 <!-- num:artifacts/cadence_summary.json#hypotheses/H2/rows/etth2/gain_fraction:.2f -->1.01<!-- /num -->배를 얻습니다.
+- **승격 게이트**(후보와 현역을 후보 검증 구간 중 정답이 다 도착한 날들에서 같은 표본으로 비교해 후보가 나을 때만 교체)는 이상 구간에서 학습된 나쁜 모델이 서비스에 오르는 것을 막습니다. 이상 구간에서 울리는 비율 규칙은 ETTh1 에서 오히려 해로웠습니다(<!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/ratio-0.2/improvement_vs_never_pct:+.1f -->-1.1<!-- /num -->%).
 - 사전 가설 H1~H4 중 둘(H1 재학습은 늘 도움이 된다, H3 웜 스타트는 비용 1/3)은 기각됐고 그대로 적었습니다. 전체 격자·신뢰구간·차트는 [docs/results.md](docs/results.md).
 
 ![etth2 재학습 횟수 대 MAE](docs/assets/charts/pareto_etth2.svg)
@@ -144,7 +144,7 @@ flowchart LR
 
 | 문제 | 원인 | 해결 | 교훈 |
 |---|---|---|---|
-| 이상 구간에서 검출기가 울려 재학습한 모델이 오히려 나빠짐(ETTh1 비율 규칙 <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/ratio-0.2/improvement_vs_never_pct:+.1f -->-2.6<!-- /num -->%) | 이상 구간 데이터로 학습한 후보를 검증 없이 교체 | 후보와 현역을 같은 완결 구간에서 비교해 후보가 나을 때만 교체하는 **승격 게이트** 추가. 첫 결과를 본 뒤 넣었으므로 사후 탐색으로 표시. 외부 리뷰 뒤 비교 표본이 달랐던 것(현역 쪽이 결정 뒤 도착할 정답까지 읽음)을 바로잡고 캐시를 재생성 | 재학습 "트리거"와 "승격"은 다른 결정 |
+| 이상 구간에서 검출기가 울려 재학습한 모델이 오히려 나빠짐(ETTh1 비율 규칙 <!-- num:artifacts/cadence_summary.json#datasets/etth1/expanding/policies/ratio-0.2/improvement_vs_never_pct:+.1f -->-1.1<!-- /num -->%) | 이상 구간 데이터로 학습한 후보를 검증 없이 교체 | 후보와 현역을 같은 완결 구간에서 비교해 후보가 나을 때만 교체하는 **승격 게이트** 추가. 첫 결과를 본 뒤 넣었으므로 사후 탐색으로 표시. 외부 리뷰 뒤 비교 표본이 달랐던 것(현역 쪽이 결정 뒤 도착할 정답까지 읽음)을 바로잡고 캐시를 재생성 | 재학습 "트리거"와 "승격"은 다른 결정 |
 | compose 에서 재학습 요청이 기록되지 않음 | API 컨테이너가 레지스트리를 읽기 전용으로 마운트, 두 이미지의 uid 불일치. 로컬 프로세스로는 재현 안 됨 | CI `compose` 잡이 실제 컨테이너 두 개로 루프를 돌리다 Read-only file system 으로 드러남 → uid 통일, 볼륨 쓰기 가능 | 컨테이너 경계는 실제 컨테이너로 CI 에서 돌려야 보임 |
 | H2 통계가 시드별 비율 평균의 폭주로 깨짐 | 이득이 0 근처인 데이터셋에서 비율의 분모가 0 에 가까움 | 시드 평균 MAE 의 비율로 정의를 바꾸고, 이득이 확인된 데이터셋에서만 계산. 판정은 그대로, 변경 이력에 날짜·이유 기록 | 비율 통계는 분모를 먼저 의심 |
 | Terraform 원격 상태 저장소 생성이 `SubscriptionNotFound` | 배포용 ID 가 리소스 그룹 범위라 Storage 공급자를 등록할 수 없음 | 원격 상태 대신 매 실행마다 실제 리소스를 import 하고 plan 변경 0건을 검사 | 최소 권한 ID 는 IaC 의 상태 저장 방식까지 정함 |
