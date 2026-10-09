@@ -126,6 +126,25 @@ jobs:
           )
           aws iam put-role-policy --role-name "$DEPLOY_ROLE" --policy-name metronome-deploy --policy-document "$policy"
           echo "deploy role policy written"
+      - name: account plan and organization
+        run: |
+          # Explains the probe table below: an account opened on AWS's Free plan or added to someone's
+          # organization gets that organization's service control policies. Prints the management
+          # account's e-mail domain only, never the address or any account number.
+          mask() { sed 's/[0-9]\{12\}/***/g'; }
+          {
+            echo "### Account"
+            if org=$(aws organizations describe-organization --output json 2>&1); then
+              echo "$org" | python3 -c "import json,sys; o=json.load(sys.stdin)['Organization']; print('- organization: member, feature set', o['FeatureSet'] + ', management account e-mail domain', o['MasterAccountEmail'].split('@')[-1])"
+            else
+              echo "- organization: $(echo "$org" | mask | tail -1)"
+            fi
+            plan=$(aws freetier get-account-plan-state --region us-east-1 --output json 2>&1) || true
+            echo "- account plan: $(echo "$plan" | tr -d '\n' | mask | head -c 600)"
+            echo "- regions enabled for this account:"
+            aws ec2 describe-regions --all-regions --query "Regions[].[RegionName,OptInStatus]" --output text 2>&1 | mask | sed 's/^/  - /'
+          } | tee account.md
+          cat account.md >> "$GITHUB_STEP_SUMMARY"
       - name: regions x services
         run: |
           ACCOUNT=$(aws sts get-caller-identity --query Account --output text); echo "::add-mask::$ACCOUNT"
