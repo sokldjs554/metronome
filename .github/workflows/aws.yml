@@ -1,7 +1,7 @@
 name: aws
 
 # Continuous deployment of the server demo to AWS: ECS Express Mode (Fargate behind an Application
-# Load Balancer with an AWS-provided HTTPS address) in ap-northeast-2 (Seoul), pulling the public
+# Load Balancer with an AWS-provided HTTPS address) in ap-southeast-2 (Sydney), pulling the public
 # demo image from GHCR (the same metronome-demo:sha-<commit> the azure workflow deploys; ECR is not
 # required, which matters in accounts where an organization policy denies it).
 # Every change to the demo on main builds Dockerfile.demo, pushes it to GHCR as sha-<commit>, points the
@@ -40,7 +40,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  AWS_REGION: ap-northeast-2
+  AWS_REGION: ap-southeast-2   # the only region this account's organization policy allows (see the probe table)
   CLUSTER: metronome
   SERVICE: metronome-demo
   IMAGE: ghcr.io/${{ github.repository_owner }}/metronome-demo

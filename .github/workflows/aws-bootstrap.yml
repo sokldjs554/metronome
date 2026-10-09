@@ -2,7 +2,7 @@ name: aws-bootstrap
 
 # One-time (idempotent) setup of the AWS side of the demo deployment, run by hand. It uses the
 # account's access keys from the repository secrets AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY and
-# creates, in ap-northeast-2 (Seoul):
+# creates, in ap-southeast-2 (Sydney):
 #   - the GitHub OIDC identity provider and a deploy role that only this repository's main branch
 #     can assume (so the keys can be deleted afterwards and deployments become keyless),
 #   - the ECS task execution role and the ECS infrastructure role Express Mode needs,
@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 env:
-  AWS_REGION: ap-northeast-2
+  AWS_REGION: ap-southeast-2   # the only region this account's organization policy allows (see the probe table)
   REPO: ${{ github.repository }}
   CLUSTER: metronome
   ECR_REPO: metronome-demo
