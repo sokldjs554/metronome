@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 env:
-  AWS_REGION: ap-southeast-2   # the only region this account's organization policy allows (see the probe table)
+  AWS_REGION: ap-southeast-2   # the project's home Region (new AWS sign-up: Korea -> Sydney; see the account step of aws-bootstrap)
   REPO: ${{ github.repository }}
   CLUSTER: metronome
   ECR_REPO: metronome-demo
@@ -126,6 +126,22 @@ jobs:
           )
           aws iam put-role-policy --role-name "$DEPLOY_ROLE" --policy-name metronome-deploy --policy-document "$policy"
           echo "deploy role policy written"
+      - name: account plan
+        run: |
+          # Accounts opened in AWS's sign-up experience of 2026-09 live in an organization AWS manages for
+          # them: one home Region chosen from the contact address country (US East (Ohio), Europe
+          # (Stockholm) or Asia Pacific (Sydney); Korea gets Sydney) and AWS-managed policies that deny the
+          # other Regions and a few actions such as creating OIDC providers, until the owner upgrades to
+          # the paid plan and activates advanced features. This records the plan and its remaining credits.
+          plan=$(aws freetier get-account-plan-state --region us-east-1 \
+            --query "[accountPlanType, accountPlanStatus, accountPlanRemainingCredits.amount, accountPlanExpirationDate]" \
+            --output text 2>&1) || true
+          feature=$(aws organizations describe-organization --query Organization.FeatureSet --output text 2>&1) || true
+          {
+            echo "### Account"
+            echo "- plan (type, status, remaining credits USD, expires): $(echo "$plan" | sed 's/[0-9]\{12\}/***/g' | tr '\t' ' ')"
+            echo "- organization feature set: $feature"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: regions x services
         run: |
           ACCOUNT=$(aws sts get-caller-identity --query Account --output text); echo "::add-mask::$ACCOUNT"
